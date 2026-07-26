@@ -4,7 +4,7 @@
 
 ## Proje Hakkinda
 
-GeoMorphosis, kullaniciin harita uzerinden sectigi bolgelerde yangin, kirlilik, agaclarin azalmasi ve cevresel degisimleri yapay zeka ile analiz eden, otomatik bildirimler gonderen ve PDF rapor ureten bir web platformudur.
+GeoMorphosis, kullanicinin harita uzerinden sectigi bolgelerde yangin, kirlilik, agaclarin azalmasi ve cevresel degisimleri yapay zeka ile analiz eden, otomatik bildirimler gonderen ve PDF rapor ureten bir web platformudur.
 
 ## Mimari
 
