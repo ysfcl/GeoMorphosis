@@ -1,17 +1,14 @@
 """
-GeoMorphosis - Egitim Veri Seti Toplayici
-GEE ile Sentinel-2 goruntulerini indirir, yillara gore klasorler olusturur.
+GeoMorphosis - Egitim Veri Seti Toplayici (YOLOv8 Uyumlu)
+GEE ile Sentinel-2 goruntulerini indirir, Genis Bolgeyi Grid'lere bolerek indirir.
 
 Kullanim:
-    python data_collector.py --region bursa
-    python data_collector.py --lat 40.1885 --lon 29.0610
-    python data_collector.py --region bursa --years 2020 2024
+    python data_collector.py --region bursa --years 2021 2022 2023 2024 2025
 """
 
 import ee
 import os
 import json
-import math
 import requests
 from pathlib import Path
 from datetime import datetime
@@ -21,37 +18,43 @@ OUTPUT_BASE = Path(__file__).resolve().parent.parent.parent / "data" / "raw"
 REGIONS = {
     "bursa": {
         "name": "Bursa",
-        "center": [40.1885, 29.0610],
-        "description": "Uludag orman, sehir merkezi, tarim",
-    },
-    "istanbul": {
-        "name": "Istanbul",
-        "center": [41.0082, 28.9784],
-        "description": "Kiyi, orman, kentsel alan",
-    },
-    "marmaris": {
-        "name": "Marmaris",
-        "center": [36.8530, 28.2715],
-        "description": "Yogun orman, yangin risk bolgesi",
+        # BBOX: [Batı Boylam, Güney Enlem, Doğu Boylam, Kuzey Enlem]
+        "bbox": [28.60, 39.90, 29.30, 40.40],
+        "description": "Bursa Genis Alan (Uludag, Sehir Merkezi, Nilufer, Tarim)",
     },
     "ankara": {
         "name": "Ankara",
-        "center": [39.9334, 32.8597],
-        "description": "Yari kurak arazi, tarim",
+        "bbox": [32.60, 39.80, 33.00, 40.10],
+        "description": "Ankara Genis Alan",
     },
 }
 
-DEFAULT_YEARS = [2020, 2022, 2024, 2025]
-CLOUD_THRESHOLD = 20
-TILE_SIZE = "512x512"
+DEFAULT_YEARS = [2021, 2022, 2023, 2024, 2025]
+CLOUD_THRESHOLD = 15
+TILE_DIMENSION = 640  # YOLOv8 varsayilan girdi boyutu (640x640)
 
+
+KEY_PATH = Path(__file__).resolve().parent.parent / "gee-key.json"
 
 def init_gee():
-    project_id = os.environ.get("GOOGLE_EARTH_ENGINE_PROJECT", "geomorphosis")
-    ee.Initialize(project=project_id)
-    print("GEE baslatildi")
+    try:
+        if KEY_PATH.exists():
+            # Service Account anahtarı ile yetkilendirme
+            credentials = ee.ServiceAccountCredentials(
+                "geomorphosis@geomorphosis.iam.gserviceaccount.com",
+                str(KEY_PATH)
+            )
+            ee.Initialize(credentials, project="geomorphosis")
+            print("GEE Service Account ile basariyla baslatildi (Project: geomorphosis).")
+        else:
+            # Yedek varsayılan başlatma
+            ee.Initialize(project="geomorphosis")
+            print("GEE varsayilan modda baslatildi.")
+    except Exception as e:
+        print(f"GEE Baslatilamadi: {e}")
+        raise e
 
-
+    
 def mask_clouds(image):
     qa = image.select("QA60")
     cloud_mask = qa.bitwiseAnd(1 << 10).eq(0)
@@ -59,138 +62,118 @@ def mask_clouds(image):
     return image.updateMask(cloud_mask.And(cirrus_mask)).divide(10000)
 
 
-def add_ndvi(image):
-    ndvi = image.normalizedDifference(["B8", "B4"]).rename("NDVI")
-    return image.addBands(ndvi)
+def generate_grid(bbox, grid_size_deg=0.08):
+    """
+    Genis BBOX alanini kucuk karelere (Grid) boler.
+    grid_size_deg=0.08 yaklasik ~8-9 km'lik alanlara karsilik gelir.
+    """
+    min_lon, min_lat, max_lon, max_lat = bbox
+    grids = []
+    
+    curr_lat = min_lat
+    grid_id = 0
+    while curr_lat < max_lat:
+        curr_lon = min_lon
+        while curr_lon < max_lon:
+            grid_box = ee.Geometry.Rectangle([
+                curr_lon, 
+                curr_lat, 
+                min(curr_lon + grid_size_deg, max_lon), 
+                min(curr_lat + grid_size_deg, max_lat)
+            ])
+            grids.append((f"tile_{grid_id}", grid_box))
+            grid_id += 1
+            curr_lon += grid_size_deg
+        curr_lat += grid_size_deg
+        
+    return grids
 
 
-def search_images(lat, lon, year, cloud_max=CLOUD_THRESHOLD):
-    point = ee.Geometry.Point(lon, lat)
-    roi = point.buffer(2000).bounds()
-
-    start = f"{year}-01-01"
-    end = f"{year}-12-31"
-
-    collection = (
-        ee.ImageCollection("COPERNICUS/S2_HARMONIZED")
-        .filterBounds(roi)
-        .filterDate(start, end)
-        .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", cloud_max))
-    )
-
-    count = collection.size().getInfo()
-    if count == 0:
-        return None, roi
-
-    print(f"  {year}: {count} goruntu (bulut <= %{cloud_max})")
-    return collection, roi
-
-
-def get_composite(collection, roi, bands=["B4", "B3", "B2"]):
-    composite = collection.map(mask_clouds).median().clip(roi)
-    return composite
-
-
-def download_image(composite, roi, file_path, bands=["B4", "B3", "B2"]):
+def download_tile(composite, roi, file_path):
     vis_params = {
-        "bands": bands,
+        "bands": ["B4", "B3", "B2"],
         "min": 0,
         "max": 0.3,
         "region": roi,
-        "dimensions": TILE_SIZE,
+        "dimensions": f"{TILE_DIMENSION}x{TILE_DIMENSION}",
         "format": "png",
     }
 
-    url = composite.getThumbURL(vis_params)
-    response = requests.get(url, timeout=120)
-    response.raise_for_status()
+    try:
+        url = composite.getThumbURL(vis_params)
+        response = requests.get(url, timeout=120)
+        response.raise_for_status()
 
-    with open(file_path, "wb") as f:
-        f.write(response.content)
+        with open(file_path, "wb") as f:
+            f.write(response.content)
 
-    return len(response.content)
+        return len(response.content)
+    except Exception as e:
+        print(f"    Gorsel indirme hatasi: {e}")
+        return 0
 
 
-def collect_region(region_name="bursa", custom_lat=None, custom_lon=None, years=None):
+def collect_region_dataset(region_name="bursa", years=None):
     init_gee()
 
     if years is None:
         years = DEFAULT_YEARS
 
     region = REGIONS.get(region_name, REGIONS["bursa"])
-    if custom_lat and custom_lon:
-        region = {"name": f"custom_{custom_lat}_{custom_lon}", "center": [custom_lat, custom_lon]}
-
-    center_lat, center_lon = region["center"]
     region_dir = OUTPUT_BASE / region["name"].lower()
     region_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n{'='*50}")
+    print(f"\n{'='*60}")
     print(f"Bolge: {region['name']}")
-    print(f"Merkez: {center_lat}, {center_lon}")
     print(f"Yillar: {years}")
-    print(f"Cikis: {region_dir}")
-    print(f"{'='*50}")
+    print(f"Hedef Dizin: {region_dir}")
+    print(f"{'='*60}")
 
-    metadata = {
-        "region": region["name"],
-        "center": [center_lat, center_lon],
-        "years": years,
-        "cloud_threshold": CLOUD_THRESHOLD,
-        "tile_size": TILE_SIZE,
-        "created": datetime.now().isoformat(),
-        "images": [],
-    }
+    # Genis alani karelere boluyoruz
+    grids = generate_grid(region["bbox"])
+    print(f"Toplam Olusturulan Grid Kare Sayisi: {len(grids)}")
 
     for year in years:
         year_dir = region_dir / str(year)
         year_dir.mkdir(exist_ok=True)
+        images_dir = year_dir / "dataset_tiles"
+        images_dir.mkdir(exist_ok=True)
 
-        print(f"\n--- {year} ---")
+        print(f"\n--- {year} Yili Verileri Toplaniyor ---")
 
-        collection, roi = search_images(center_lat, center_lon, year)
-        if collection is None:
-            print(f"  {year}: Goruntu bulunamadi, atlandi")
-            continue
+        # Yaz aylari (Bulutsuz ve yangin/kirlilik takibi icin en uygun donem)
+        start_date = f"{year}-06-01"
+        end_date = f"{year}-09-30"
 
-        composite = get_composite(collection, roi)
+        collection = (
+            ee.ImageCollection("COPERNICUS/S2_HARMONIZED")
+            .filterDate(start_date, end_date)
+            .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", CLOUD_THRESHOLD))
+        )
 
-        rgb_path = year_dir / "rgb.png"
-        size = download_image(composite, roi, str(rgb_path), ["B4", "B3", "B2"])
-        print(f"  rgb.png indirildi ({size} byte)")
+        composite = collection.map(mask_clouds).median()
 
-        ndvi_collection = collection.map(add_ndvi)
-        ndvi_composite = ndvi_collection.median().clip(roi)
-        ndvi_path = year_dir / "ndvi.png"
-        ndvi_size = download_image(ndvi_composite, roi, str(ndvi_path), ["NDVI"])
-        print(f"  ndvi.png indirildi ({ndvi_size} byte)")
+        for tile_name, roi_geometry in grids:
+            tile_composite = composite.clip(roi_geometry)
+            file_path = images_dir / f"{region_name}_{year}_{tile_name}.png"
 
-        metadata["images"].append({
-            "year": year,
-            "rgb": str(rgb_path.relative_to(OUTPUT_BASE)),
-            "ndvi": str(ndvi_path.relative_to(OUTPUT_BASE)),
-            "size_bytes": size,
-        })
+            if file_path.exists():
+                print(f"  {file_path.name} zaten mevcut, atlanıyor.")
+                continue
 
-    meta_path = region_dir / "metadata.json"
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2, ensure_ascii=False)
+            size = download_tile(tile_composite, roi_geometry, str(file_path))
+            if size > 0:
+                print(f"  [+] {file_path.name} indirildi ({size} bytes)")
 
-    print(f"\nTamamlandi!")
-    print(f"Veriler: {region_dir}")
-    print(f"Metadata: {meta_path}")
-
-    return region_dir
+    print(f"\nVeri toplama tamamlandi! Tum kareler {region_dir} altina kaydedildi.")
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="GEE ile egitim veri seti olusturma")
+    parser = argparse.ArgumentParser(description="YOLOv8 Uyumlu GEE Veri Toplayici")
     parser.add_argument("--region", default="bursa", choices=list(REGIONS.keys()))
-    parser.add_argument("--lat", type=float, help="Ozel enlem")
-    parser.add_argument("--lon", type=float, help="Ozel boylam")
     parser.add_argument("--years", nargs="+", type=int, default=DEFAULT_YEARS)
     args = parser.parse_args()
 
-    collect_region(args.region, args.lat, args.lon, args.years)
+    collect_region_dataset(args.region, args.years)
