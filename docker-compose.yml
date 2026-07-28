@@ -1,32 +1,37 @@
-version: '3.8'
-
 services:
-  frontend:
-    build: ./frontend
-    ports:
-      - '3000:3000'
-    environment:
-      - NEXT_PUBLIC_AI_ENGINE_URL=http://ai-engine:8000
-      - NEXT_PUBLIC_WORKER_URL=http://worker:3001
-    depends_on:
-      - ai-engine
-    volumes:
-      - ./data:/app/data
-
   ai-engine:
     build: ./ai-engine
+    container_name: geomorphosis-ai-engine
     ports:
-      - '8000:8000'
+      - "8000:8000"
     environment:
-      - COPERNICUS_CLIENT_ID=${COPERNICUS_CLIENT_ID}
-      - COPERNICUS_CLIENT_SECRET=${COPERNICUS_CLIENT_SECRET}
-      - NASA_FIRMS_API_KEY=${NASA_FIRMS_API_KEY}
+      - PYTHONUNBUFFERED=1
+      - GOOGLE_EARTH_ENGINE_PROJECT=geomorphosis
+      - GOOGLE_EARTH_ENGINE_CREDENTIALS=/app/geomorphosis-cb3ae273c071.json
     volumes:
+      - ./ai-engine:/app
       - ./data:/app/data
-      - ./ai-engine/models:/app/models
+      - /app/venv
+    restart: unless-stopped
+
+  web-client:
+    build:
+      context: ./frontend
+    container_name: geomorphosis-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - ./data:/app/data
+    environment:
+      - NEXT_PUBLIC_AI_ENGINE_URL=http://ai-engine:8000
+    depends_on:
+      - ai-engine
 
   worker:
     build: ./worker
+    container_name: geomorphosis-worker
     environment:
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
@@ -38,6 +43,3 @@ services:
       - ai-engine
     volumes:
       - ./data:/app/data
-
-volumes:
-  data:
