@@ -1,0 +1,62 @@
+Marmara Bölgesi'nin 2010–2025 yılları arasındaki 15 yıllık uydu geçmişini kapsayan, ormansızlaştırma (deforestation) ve çevre kirliliği (pollution) odaklı yapay zeka eğitim veri seti mimarisi ve kod tasarımı aşağıda sunulmuştur.
+1. Veri Seti Oluşturma Yol Haritası (Roadmap)
+Adım 1: Kritik Uydu Verisi Problemi ve Çözümü (2010–2025)
+	Problem: Sentinel-2 uydusu 2015 yılının ortasında göreve başlamıştır. Bu nedenle 2010–2014 yılları arasında Sentinel-2 görüntüsü bulunmamaktadır.
+	Çözüm: Çoklu Uydu Hibrit Yaklaşımı (Multi-Satellite Fallback)
+	2015 – 2025: High-res (10" m" ) Sentinel-2 (COPERNICUS/S2_HARMONIZED)
+	2013 – 2014: Medium-res (30" m" ) Landsat 8 (LANDSAT/LC08/C02/T1_L2)
+	2010 – 2012: Medium-res (30" m" ) Landsat 7 (LANDSAT/LE07/C02/T1_L2)
+Adım 2: Marmara Bölgesi Sıcak Noktaları (ROIs) & Veri Ayrımı
+Veri sızıntısını (Data Leakage) önlemek için Mekansal Ayrım (Spatial Split) uygulanmalıdır. Aynı bölgenin farklı yılları hem train hem test klasöründe bulunmamalı, bölgeler doğrudan ayrılmalıdır.
+Veri Seti Kütüphanesi	Bölge / Konum	Odak Alanı	Split
+deforestation_dataset	İstanbul Kuzey Ormanları	Havalimanı/Köprü yapılaşması	train
+deforestation_dataset	Bursa Uludağ Etekleri	Orman sınırları ve madencilik	train
+deforestation_dataset	Çanakkale Kazdağları	Maden/Orman tahribatı	test
+pollution_dataset	Ergene Havsası (Tekirdağ)	Sanayi atıkları & Nehir kirliliği	train
+pollution_dataset	İzmit Körfezi / Dilovası	Liman ve ağır sanayi kirliliği	train
+pollution_dataset	Marmara Denizi / Gemlik	Deniz kirliliği & Müsilaj riski	test
+
+
+Adım 3: İndeks Hesabı ve Tayf Kombinasyonu (Spectral Indices)
+	Ormansızlaşma: RGB görsellerin yanı sıra NDVI=(NIR-RED)/(NIR+RED) bantları eklenir.
+	Su/Su Kirliliği: NDWI=(GREEN-NIR)/(GREEN+NIR) bantları kullanılarak su kütlelerindeki renk değişimi ve türbidite (bulanıklık) yakalanır.
+2. Mevcut data_collector.py İncelemesi ve Eksikler
+Verdiğin script temel bir indirme altyapısı sunsa da hedeflediğin mimari için şu eksiklere sahiptir: 
+	2010–2014 Arası Kırılma: Yalnızca Sentinel-2 koleksiyonunu aradığı için 2015 öncesi yıllarda boş veri döndürür. 
+	Klasör Yapısı: Verileri data/raw/bursa/2020/rgb.png şeklinde kaydetmektedir. İstediğin deforestation_dataset/train/bursa/2020.png yapısına uymamaktadır. 
+	Bölge Tespiti: Veri setlerini görev türüne (deforestation / pollution) göre kategorize etmemektedir. 
+3. Kod Yapılandırması (Refactoring)
+Sistemi modüler hale getirmek için GEE uydu çekim mantığını gee_utils.py dosyasına taşıyacağız, data_collector.py dosyasını ise veri seti düzenine göre yeniden yapılandıracağız.
+
+
+
+
+
+
+4. Oluşan Veri Dizini Hiyerarşisi
+İşlem tamamlandığında data/raw/ dizininin altında tam olarak hedeflediğin veri yapısı hazır hale gelecektir:
+data/raw/
+├── deforestation_dataset/
+│   ├── train/
+│   │   ├── istanbul_kuzey/
+│   │   │   ├── 2010.png
+│   │   │   ├── 2011.png
+│   │   │   └── ... 2025.png
+│   │   └── bursa_uludag/
+│   │       ├── 2010.png
+│   │       └── ... 2025.png
+│   └── test/
+│       └── canakkale_kazdaglari/
+│           ├── 2010.png
+│           └── ... 2025.png
+│
+└── pollution_dataset/
+    ├── train/
+    │   ├── ergene_havzasi/
+    │   │   ├── 2010.png
+    │   │   └── ... 2025.png
+    │   └── izmit_korfezi/
+    │       └── ...
+    └── test/
+        └── gemlik_korfezi/
+            └── ...

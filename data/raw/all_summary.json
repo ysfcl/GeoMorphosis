@@ -1,0 +1,284 @@
+{
+  "generated_at": "2026-07-28T14:12:40.961688",
+  "dataset_type": "all",
+  "total_ok": 24,
+  "total_fail": 0,
+  "locations": {
+    "istanbul_kuzey": {
+      "location": "istanbul_kuzey",
+      "dataset": "deforestation_dataset",
+      "split": "train",
+      "center": [
+        41.2215,
+        28.9248
+      ],
+      "description": "Kuzey ormanlari yapilanma ve agac kaybi",
+      "years": [
+        2015,
+        2020,
+        2022,
+        2025
+      ],
+      "tile_size": "512x512",
+      "created": "2026-07-28T14:01:33.260859",
+      "images": [
+        {
+          "year": 2015,
+          "rgb": "2015.png",
+          "ndvi": "2015_ndvi.png",
+          "size_bytes": 424943
+        },
+        {
+          "year": 2020,
+          "rgb": "2020.png",
+          "ndvi": "2020_ndvi.png",
+          "size_bytes": 382397
+        },
+        {
+          "year": 2022,
+          "rgb": "2022.png",
+          "ndvi": "2022_ndvi.png",
+          "size_bytes": 389895
+        },
+        {
+          "year": 2025,
+          "rgb": "2025.png",
+          "ndvi": "2025_ndvi.png",
+          "size_bytes": 371104
+        }
+      ]
+    },
+    "bursa_uludag": {
+      "location": "bursa_uludag",
+      "dataset": "deforestation_dataset",
+      "split": "train",
+      "center": [
+        40.1205,
+        29.131
+      ],
+      "description": "Orman tahribati ve madencilik",
+      "years": [
+        2015,
+        2020,
+        2022,
+        2025
+      ],
+      "tile_size": "512x512",
+      "created": "2026-07-28T14:03:08.797340",
+      "images": [
+        {
+          "year": 2015,
+          "rgb": "2015.png",
+          "ndvi": "2015_ndvi.png",
+          "size_bytes": 482208
+        },
+        {
+          "year": 2020,
+          "rgb": "2020.png",
+          "ndvi": "2020_ndvi.png",
+          "size_bytes": 463648
+        },
+        {
+          "year": 2022,
+          "rgb": "2022.png",
+          "ndvi": "2022_ndvi.png",
+          "size_bytes": 462683
+        },
+        {
+          "year": 2025,
+          "rgb": "2025.png",
+          "ndvi": "2025_ndvi.png",
+          "size_bytes": 475092
+        }
+      ]
+    },
+    "canakkale_kazdaglari": {
+      "location": "canakkale_kazdaglari",
+      "dataset": "deforestation_dataset",
+      "split": "test",
+      "center": [
+        39.712,
+        26.825
+      ],
+      "description": "Kazdaglari orman ortusu degisimi",
+      "years": [
+        2015,
+        2020,
+        2022,
+        2025
+      ],
+      "tile_size": "512x512",
+      "created": "2026-07-28T14:04:27.119146",
+      "images": [
+        {
+          "year": 2015,
+          "rgb": "2015.png",
+          "ndvi": "2015_ndvi.png",
+          "size_bytes": 492645
+        },
+        {
+          "year": 2020,
+          "rgb": "2020.png",
+          "ndvi": "2020_ndvi.png",
+          "size_bytes": 485815
+        },
+        {
+          "year": 2022,
+          "rgb": "2022.png",
+          "ndvi": "2022_ndvi.png",
+          "size_bytes": 487540
+        },
+        {
+          "year": 2025,
+          "rgb": "2025.png",
+          "ndvi": "2025_ndvi.png",
+          "size_bytes": 478693
+        }
+      ]
+    },
+    "ergene_havzasi": {
+      "location": "ergene_havzasi",
+      "dataset": "pollution_dataset",
+      "split": "train",
+      "center": [
+        41.278,
+        27.812
+      ],
+      "description": "Ergene nehir ve toprak kirliligi",
+      "years": [
+        2015,
+        2020,
+        2022,
+        2025
+      ],
+      "tile_size": "512x512",
+      "created": "2026-07-28T14:06:10.690817",
+      "images": [
+        {
+          "year": 2015,
+          "rgb": "2015.png",
+          "ndvi": "2015_ndvi.png",
+          "size_bytes": 585068,
+          "ndwi": "2015_ndwi.png"
+        },
+        {
+          "year": 2020,
+          "rgb": "2020.png",
+          "ndvi": "2020_ndvi.png",
+          "size_bytes": 569047,
+          "ndwi": "2020_ndwi.png"
+        },
+        {
+          "year": 2022,
+          "rgb": "2022.png",
+          "ndvi": "2022_ndvi.png",
+          "size_bytes": 576781,
+          "ndwi": "2022_ndwi.png"
+        },
+        {
+          "year": 2025,
+          "rgb": "2025.png",
+          "ndvi": "2025_ndvi.png",
+          "size_bytes": 587662,
+          "ndwi": "2025_ndwi.png"
+        }
+      ]
+    },
+    "izmit_korfezi": {
+      "location": "izmit_korfezi",
+      "dataset": "pollution_dataset",
+      "split": "train",
+      "center": [
+        40.76,
+        29.54
+      ],
+      "description": "Agir sanayi ve kiyi kirliligi",
+      "years": [
+        2015,
+        2020,
+        2022,
+        2025
+      ],
+      "tile_size": "512x512",
+      "created": "2026-07-28T14:07:46.190032",
+      "images": [
+        {
+          "year": 2015,
+          "rgb": "2015.png",
+          "ndvi": "2015_ndvi.png",
+          "size_bytes": 370909,
+          "ndwi": "2015_ndwi.png"
+        },
+        {
+          "year": 2020,
+          "rgb": "2020.png",
+          "ndvi": "2020_ndvi.png",
+          "size_bytes": 373162,
+          "ndwi": "2020_ndwi.png"
+        },
+        {
+          "year": 2022,
+          "rgb": "2022.png",
+          "ndvi": "2022_ndvi.png",
+          "size_bytes": 423317,
+          "ndwi": "2022_ndwi.png"
+        },
+        {
+          "year": 2025,
+          "rgb": "2025.png",
+          "ndvi": "2025_ndvi.png",
+          "size_bytes": 376679,
+          "ndwi": "2025_ndwi.png"
+        }
+      ]
+    },
+    "gemlik_korfezi": {
+      "location": "gemlik_korfezi",
+      "dataset": "pollution_dataset",
+      "split": "test",
+      "center": [
+        40.421,
+        29.12
+      ],
+      "description": "Deniz renk degisimi ve musilaj kirliligi",
+      "years": [
+        2015,
+        2020,
+        2022,
+        2025
+      ],
+      "tile_size": "512x512",
+      "created": "2026-07-28T14:10:16.828214",
+      "images": [
+        {
+          "year": 2015,
+          "rgb": "2015.png",
+          "ndvi": "2015_ndvi.png",
+          "size_bytes": 447079,
+          "ndwi": "2015_ndwi.png"
+        },
+        {
+          "year": 2020,
+          "rgb": "2020.png",
+          "ndvi": "2020_ndvi.png",
+          "size_bytes": 444367,
+          "ndwi": "2020_ndwi.png"
+        },
+        {
+          "year": 2022,
+          "rgb": "2022.png",
+          "ndvi": "2022_ndvi.png",
+          "size_bytes": 491283,
+          "ndwi": "2022_ndwi.png"
+        },
+        {
+          "year": 2025,
+          "rgb": "2025.png",
+          "ndvi": "2025_ndvi.png",
+          "size_bytes": 455998,
+          "ndwi": "2025_ndwi.png"
+        }
+      ]
+    }
+  }
+}
