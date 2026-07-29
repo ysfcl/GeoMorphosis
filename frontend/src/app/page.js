@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Map from '@/components/Map';
+import ReportPreview from '@/components/Report/ReportPreview';
 import Analytics from '@/components/Analytics';
 
 export default function Home() {
@@ -86,6 +87,13 @@ export default function Home() {
             )}
           </div>
         </div>
+
+        {/* YENİ EKLENEN KISIM: PDF RAPOR ÖNİZLEME BİLEŞENİ */}
+        <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">Raporlama ve Çıktı</h2>
+          <ReportPreview />
+        </div>
+
       </div>
     </main>
   );
