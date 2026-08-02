@@ -1,0 +1,5 @@
+path: C:\Users\User\Desktop\GeoMorphosis\GeoMorphosis\data\yolo\pollution
+train: images/train
+val: images/val
+nc: 1
+names: ['pollution']
