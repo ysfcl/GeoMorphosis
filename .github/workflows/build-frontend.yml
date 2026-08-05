@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'frontend/**'
+      - '.github/workflows/build-frontend.yml'
     branches:
       - main
       - feature/ML
