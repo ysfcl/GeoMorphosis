@@ -52,3 +52,4 @@ jobs:
           name: frontend-deploy
           path: frontend/deploy/
           retention-days: 7
+          include-hidden-files: true
