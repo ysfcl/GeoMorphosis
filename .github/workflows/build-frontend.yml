@@ -1,0 +1,54 @@
+name: Build Frontend (cPanel Deploy)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'frontend/**'
+    branches:
+      - main
+      - feature/ML
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build (Next.js)
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_AI_ENGINE_URL: ${{ secrets.NEXT_PUBLIC_AI_ENGINE_URL }}
+        run: npm run build
+
+      - name: Package deploy files
+        run: |
+          mkdir -p deploy
+          cp -r .next deploy/.next
+          cp -r public deploy/public
+          cp server.js deploy/server.js
+          cp package.json deploy/package.json
+          cp next.config.js deploy/next.config.js
+          cp .env.example deploy/.env.example
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-deploy
+          path: frontend/deploy/
+          retention-days: 7
