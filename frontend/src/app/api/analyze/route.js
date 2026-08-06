@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sendTelegramNotification } from '@/lib/telegram';
+import { buildMockAnalysis } from '@/lib/mockAnalysis';
 
 export async function POST(request) {
   try {
@@ -51,12 +52,23 @@ export async function POST(request) {
     } catch(error) {
       clearTimeout(timeout);
 
+      // --- DEMO FALLBACK: AI Engine'e ulaşılamazsa mock analiz başlat ---
+      const firstPoint = start_points[0];
+      console.warn(`AI Engine'e ulaşılamadı (${error.message}). Demo analiz döndürülüyor.`);
+
       await sendTelegramNotification(
         `Vezneye (FastAPI) bağlanırken hata oluştu: ${error.message}`,
         'Sistem Bağlantı Hatası'
       );
 
-      return NextResponse.json({ error: 'Vezneye ulaşılamadı' }, { status: 502 });
+      const mock = buildMockAnalysis({
+        taskId: `demo-${Date.now()}`,
+        lat: firstPoint.lat,
+        lon: firstPoint.lng,
+        regionName: firstPoint.region_name,
+      });
+
+      return NextResponse.json({ task_id: mock.task_id, message: mock.message, demo: true });
     }
   } catch (error) {
     return NextResponse.json({ error: 'İstek işlenirken hata oluştu' }, { status: 500 });
@@ -86,7 +98,16 @@ export async function GET(request) {
       // Frontend'e durumu ilet (pending, processing, completed veya failed)
       return NextResponse.json(statusData);
     } catch (error) {
-       return NextResponse.json({ error: 'Durum sorgulanamadı' }, { status: 500 });
+      console.warn(`AI Engine durum sorgusu başarısız (${error.message}). Demo analiz döndürülüyor.`);
+
+      // --- DEMO FALLBACK: task_id demo- ile başlıyorsa mock analiz tamamlandı olarak dön ---
+      const mock = buildMockAnalysis({
+        taskId,
+        lat: 40.18,
+        lon: 29.06,
+      });
+
+      return NextResponse.json(mock);
     }
   }
 

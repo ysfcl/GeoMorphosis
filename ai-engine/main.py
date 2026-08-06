@@ -32,7 +32,11 @@ app.add_middleware(
 
 # Redis bağlantısı (Docker üzerinden, Node.js Worker ile haberleşmek için)
 # decode_responses=True sayesinde veriler byte yerine string olarak gelir
-r = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
+# Lokal çalıştırmada REDIS_HOST ortam değişkeni boşsa 127.0.0.1 kullanılır.
+import os
+REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
 
 # Güncellenmiş Request Modeli (Frontend ekibinin kullanacağı start ve end pointler eklendi)
 class AnalyzeRequest(BaseModel):

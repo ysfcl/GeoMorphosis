@@ -30,7 +30,7 @@ function RegionContent() {
         
         // 1. Vezneye (FastAPI) iş emrini ver (POST)
         // Backend'in beklediği start_points listesine haritadaki lat/lon'u gönderiyoruz
-        const postRes = await fetch('(/api(analyze', {
+        const postRes = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

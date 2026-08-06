@@ -8,6 +8,8 @@ services:
       - PYTHONUNBUFFERED=1
       - GOOGLE_EARTH_ENGINE_PROJECT=geomorphosis
       - GOOGLE_EARTH_ENGINE_CREDENTIALS=/app/geomorphosis-cb3ae273c071.json
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
       - ./ai-engine:/app
       - ./data:/app/data
