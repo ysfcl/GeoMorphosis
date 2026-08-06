@@ -6,6 +6,8 @@ from typing import Optional
 import json
 import sys
 import os
+import redis
+import uuid
 
 # utils klasöründeki veritabanı fonksiyonlarımıza erişmek için yol ayarı
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -28,13 +30,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Redis bağlantısı (Docker üzerinden, Node.js Worker ile haberleşmek için)
+# decode_responses=True sayesinde veriler byte yerine string olarak gelir
+r = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
 
+# Güncellenmiş Request Modeli (Frontend ekibinin kullanacağı start ve end pointler eklendi)
 class AnalyzeRequest(BaseModel):
-    lat: float
-    lon: float
+    start_points: list
+    end_points: list
     buffer_meters: int = 1000
     years: Optional[list[int]] = None
-
 
 class SubscribeRequest(BaseModel):
     email: str
@@ -50,60 +55,59 @@ def startup_event():
 def read_root():
     return {"status": "active", "service": "GeoMorphosis AI Engine Ready"}
 
-@app.post("/analyze")
+# --- VEZNE (RECEPTION) ENDPOINT'İ ---
+# Frontend sadece buraya istek atıp bir fiş numarası (task_id) alacak.
+@app.post("/api/analyze")
 def analyze_region(request: AnalyzeRequest, req: Request):
     try:
         ip_address = req.client.host if req.client else "unknown"
-        coordinates = f"{request.lat},{request.lon}"
-        region_name = f"Bolge [{request.lat}, {request.lon}]"
+        task_id = str(uuid.uuid4())
 
-        results = download_satellite_series(
-            lat=request.lat,
-            lon=request.lon,
-            buffer_meters=request.buffer_meters,
-            years=request.years,
-        )
+        # Worker'a (Mutfak) gidecek veriyi hazırlıyoruz
+        task_data = {
+            "start_points": request.start_points,
+            "end_points": request.end_points,
+            "buffer_meters": request.buffer_meters,
+            "years": request.years,
+            "ip_address": ip_address
+        }
 
-        downloaded = [r for r in results if r["status"] == "ok"]
-        demo_mode = any(r["status"] == "demo" for r in results)
-
-        ai_results = json.dumps({
-            "fire_risk": "dusuk",
-            "pollution_level": "yok",
-            "ndvi_score": 0.75,
-            "satellite_images": downloaded,
-            "total_years_analyzed": len(results),
-            "demo_mode": demo_mode,
+        # 1. Görevi Redis'e kaydet (pending durumu ile)
+        r.hset(f"task:{task_id}", mapping={
+            "status": "pending",
+            "data": json.dumps(task_data)
         })
 
-        image_no = str(len(downloaded))
+        # 2. Görevi Mutfak kuyruğuna (taskQueue) it
+        r.lpush("taskQueue", task_id)
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO regions_analysis
-            (ip_address, image_no, region_name, coordinates, ai_results)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (ip_address, image_no, region_name, coordinates, ai_results))
-        conn.commit()
-        record_id = cursor.lastrowid
-        conn.close()
+        # Not: Eskiden veritabanı kaydı (sqlite) burada eşzamanlı yapılıyordu. 
+        # Artık bu işlem Node.js tarafında veya ayrı bir sonuç okuyucu serviste yapılmalı.
 
         return {
-            "status": "completed",
-            "region_name": region_name,
-            "fire_risk": "dusuk",
-            "pollution_level": "yok",
-            "ndvi_score": 0.75,
-            "satellite_images": downloaded,
-            "total_years_analyzed": len(results),
-            "demo_mode": demo_mode,
-            "record_id": record_id,
+            "task_id": task_id,
+            "message": "Analiz sıraya alındı, mutfakta işleniyor."
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- DURUM SORGULAMA ENDPOINT'İ ---
+# Frontend'in polling (sürekli sorgulama) yaparak analiz sonucunu alacağı yer.
+@app.get("/api/status/{task_id}")
+def get_status(task_id: str):
+    task = r.hgetall(f"task:{task_id}")
 
+    if not task:
+        raise HTTPException(status_code=404, detail="Görev bulunamadı")
+
+    # Eğer görev tamamlanmışsa Node.js Worker'dan gelen stringified JSON result'u objeye çevir
+    if task.get("status") == "completed" and "result" in task:
+        task["result"] = json.loads(task["result"])
+
+    return task
+
+
+# Mevcut satellite endpoint'ini bozmadan koruyoruz
 @app.get("/satellite/latest")
 def latest_satellite(
     lat: Optional[float] = Query(default=None),
@@ -122,6 +126,7 @@ def latest_satellite(
         return result
     except Exception as e:
         return {"demo": True, "message": str(e), "lat": lat, "lon": lon}
+
 
 if __name__ == "__main__":
     # Sunucuyu 8000 portunda başlat

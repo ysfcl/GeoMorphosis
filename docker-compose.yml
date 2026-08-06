@@ -26,12 +26,15 @@ services:
       - ./data:/app/data
     environment:
       - NEXT_PUBLIC_AI_ENGINE_URL=http://ai-engine:8000
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
     depends_on:
       - ai-engine
 
   worker:
     build: ./worker
     container_name: geomorphosis-worker
+    restart: on-failure
     environment:
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
@@ -39,7 +42,17 @@ services:
       - SMTP_PASS=${SMTP_PASS}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AI_ENGINE_URL=http://ai-engine:8000
     depends_on:
       - ai-engine
+      - redis
     volumes:
       - ./data:/app/data
+  redis:
+    image: redis:alpine
+    container_name: geomorphosis-redis
+    ports:  
+      - "6379:6379"
+    restart: always

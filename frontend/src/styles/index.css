@@ -8,6 +8,12 @@
   --background-end-rgb: 255, 255, 255;
 }
 
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(to bottom, rgb(var(--background-start-rgb)), rgb(var(--background-end-rgb)));
@@ -30,8 +36,20 @@ body {
 }
 
 #map {
-  height: 500px;
+  height: 100%;
   width: 100%;
-  border-radius: 0.75rem;
   z-index: 0;
+}
+/* Leaflet Draw İkon Düzeltmesi */
+.leaflet-draw-toolbar a {
+  background-image: url('https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/images/spritesheet.png') !important;
+}
+
+.leaflet-retina .leaflet-draw-toolbar a {
+  background-image: url('https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/images/spritesheet-2x.png') !important;
+}
+
+.leaflet-draw-actions a {
+  background-color: #1f2937 !important; /* Tailwind gray-800 */
+  color: #fff !important;
 }
