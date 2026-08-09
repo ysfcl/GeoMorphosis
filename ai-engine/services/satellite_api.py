@@ -46,6 +46,9 @@ def _mock_satellite_results(lat, lon, years):
             "year": year,
             "status": "demo",
             "path": None,
+            "image_path": None,
+            "rgb_path": None,
+            "ndvi_path": None,
             "note": f"Demo verisi - GEE yetkisi gerekli ({lat}, {lon})",
         })
     return results
@@ -103,7 +106,14 @@ def download_satellite_series(
         count = dataset.size().getInfo()
         if count == 0:
             print(f"{year}: Uygun goruntu bulunamadi, atlanıyor")
-            results.append({"year": year, "status": "no_data", "path": None})
+            results.append({
+                "year": year,
+                "status": "no_data",
+                "path": None,
+                "image_path": None,
+                "rgb_path": None,
+                "ndvi_path": None,
+            })
             continue
 
         image = dataset.median().clip(roi)
@@ -127,14 +137,39 @@ def download_satellite_series(
                 f.write(response.content)
 
             print(f"{year} indirildi: {file_path}")
-            results.append({"year": year, "status": "ok", "path": file_path})
+            results.append(
+                {
+                    "year": year,
+                    "status": "ok",
+                    "path": file_path,
+                    "image_path": file_path,
+                }
+            )
 
         except requests.exceptions.RequestException as e:
             print(f"{year} indirme hatasi: {e}")
-            results.append({"year": year, "status": "download_error", "path": None})
+            results.append(
+                {
+                    "year": year,
+                    "status": "download_error",
+                    "path": None,
+                    "image_path": None,
+                    "rgb_path": None,
+                    "ndvi_path": None,
+                }
+            )
         except Exception as e:
             print(f"{year} genel hata: {e}")
-            results.append({"year": year, "status": "error", "path": None})
+            results.append(
+                {
+                    "year": year,
+                    "status": "error",
+                    "path": None,
+                    "image_path": None,
+                    "rgb_path": None,
+                    "ndvi_path": None,
+                }
+            )
 
     return results
 

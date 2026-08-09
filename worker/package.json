@@ -1,14 +1,13 @@
 {
-  "name": "geopulse-worker",
+  "name": "geomorphosis-worker",
   "version": "1.0.0",
-  "private": true,
+  "description": "Background worker (Mutfak) for Geomorphosis",
+  "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js"
+    "start": "node index.js"
   },
   "dependencies": {
-    "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.14",
-    "axios": "^1.7.2"
+    "nodemailer": "^6.9.7",
+    "redis": "^4.6.10"
   }
 }

@@ -13,10 +13,21 @@ import {
   Tooltip,
 } from 'recharts';
 
+<<<<<<< HEAD
 const ACCENT = {
   ndvi: '#2F6F52',
   fire: '#EF4444',
   pollution: '#3B82F6',
+=======
+// Rapor bileşenini import ediyoruz
+import Report from '@/components/Report';
+
+const RISK_LABELS = {
+  yok: 'Yok',
+  dusuk: 'Düşük',
+  orta: 'Orta',
+  yuksek: 'Yüksek',
+>>>>>>> origin/main
 };
 
 const RISK_LABELS = { yok: 'Yok', dusuk: 'Düşük', orta: 'Orta', yuksek: 'Yüksek' };
@@ -104,12 +115,23 @@ export default function Analytics({ data }) {
           </h1>
         </div>
 
+<<<<<<< HEAD
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#EAF4EF] border border-[#2F6F52]/20 w-fit">
           <span className="w-1.5 h-1.5 rounded-full bg-[#2F6F52]" />
 
           <span className="text-[11px] tracking-wide text-[#2F6F52] font-medium uppercase">
             {data.status ?? 'Tamamlandı'}
           </span>
+=======
+        {/* Durum rozeti ve Rapor butonu yan yana eklendi */}
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <span className="px-4 py-2 rounded-full bg-green-100 text-green-700 font-semibold whitespace-nowrap">
+            ● {data.status ?? 'Analiz tamamlandı'}
+          </span>
+          <div className="w-full sm:w-56">
+            <Report data={data} />
+          </div>
+>>>>>>> origin/main
         </div>
       </div>
 

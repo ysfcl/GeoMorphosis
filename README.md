@@ -89,6 +89,18 @@ docker-compose up --build
 | `SMTP_USER` | E-posta gonderici adresi |
 | `SMTP_PASS` | E-posta uygulama sifresi |
 
+## Test etme
+
+### ai-engine
+ Node test  `cd worker && node --test`
+
+### worker
+ Python tests `cd ai-engine && python -m pytest -q tests/test_satellite_service.py`
+
+### frontend
+ Frontend tests `cd frontend && npm run test`
+
+
 ## API Endpoints
 
 | Method | Endpoint | Aciklama |

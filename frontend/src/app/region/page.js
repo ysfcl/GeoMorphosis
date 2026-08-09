@@ -9,27 +9,74 @@ function RegionContent() {
   const searchParams = useSearchParams();
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const aiLayerGroupRef = useRef(null); // Çakışmaları önlemek için yeni katman referansı
+
   const [regionData, setRegionData] = useState(null);
   const [activeTab, setActiveTab] = useState('map');
+  const [analysisStatus, setAnalysisStatus] = useState('loading'); // 'loading' | 'processing' | 'success' | 'error'
 
   const lat = parseFloat(searchParams.get('lat')) || 0;
   const lon = parseFloat(searchParams.get('lon')) || 0;
 
+  // --- VEZNE-MUTFAK (POLLING) MANTIĞI BURADA ---
   useEffect(() => {
     if (!lat || !lon) return;
 
+    let pollInterval;
+
     const fetchRegion = async () => {
       try {
-        const res = await fetch(`/api/analyze?lat=${lat}&lon=${lon}`);
-        const data = await res.json();
-        setRegionData(data);
+        setAnalysisStatus('loading');
+
+        // 1. Vezneye (FastAPI) iş emrini ver (POST)
+        // Backend'in beklediği start_points listesine haritadaki lat/lon'u gönderiyoruz
+        const postRes = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            start_points: [{ lat, lon }],
+            end_points: [], // Eğer bitiş noktası yoksa boş liste
+            buffer_meters: 1000
+          })
+        });
+
+        const postData = await postRes.json();
+        const taskId = postData.task_id;
+
+        if (!taskId) throw new Error('Task ID alınamadı');
+
+        setAnalysisStatus('processing');
+
+        // 2. Mutfaktan (Redis) yemeğin durumunu kontrol et (Polling)
+        pollInterval = setInterval(async () => {
+          const statusRes = await fetch(`/api/analyze/?task_id=${taskId}`);
+          const statusData = await statusRes.json();
+
+          if (statusData.status === 'completed') {
+            clearInterval(pollInterval); // İş bitti, sormayı bırak
+            setRegionData(statusData.result); // Analytics.js'i besleyecek veriyi state'e yaz
+            setAnalysisStatus('success');
+          } else if (statusData.status === 'failed') {
+            clearInterval(pollInterval);
+            setAnalysisStatus('error');
+          }
+        }, 3000); // Her 3 saniyede bir kontrol et
+
       } catch (err) {
-        console.error('Veri yuklenemedi:', err);
+        console.error('Veri yüklenemedi:', err);
+        setAnalysisStatus('error');
       }
     };
     fetchRegion();
+
+    // Component kapandığında interval'i temizle (Memory Leak önlemi)
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [lat, lon]);
 
+
+  // --- HARİTA VE OVERLAP DÜZELTMESİ ---
   const initMap = useCallback(async () => {
     if (!mapRef.current || mapInstanceRef.current) return;
     if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
@@ -78,9 +125,34 @@ function RegionContent() {
       .bindPopup(`Enlem: ${lat}<br>Boylam: ${lon}`)
       .openPopup();
 
+    // YENİ: AI noktalarını tutacak boş bir katman grubu oluştur
+    aiLayerGroupRef.current = L.layerGroup().addTo(map);
+
     mapInstanceRef.current = map;
   }, [lat, lon]);
 
+  // Yeni yapay zeka verisi geldiğinde haritayı güncelleme mantığı
+  useEffect(() => {
+    if (regionData && mapInstanceRef.current && aiLayerGroupRef.current) {
+      const L = window.L; // Leaflet yüklenmiş kabul ediyoruz
+
+      // ÖNEMLİ: Çakışmayı (Overlap) önlemek için eski AI noktalarını temizle
+      aiLayerGroupRef.current.clearLayers();
+
+      // Örnek: regionData içinden gelen yeni noktaları haritaya basma
+      // (Eğer backend 'generated_path' veya benzeri bir dizi döndürüyorsa)
+      if (regionData.generated_path) {
+        regionData.generated_path.forEach(point => {
+           L.circleMarker([point.lat, point.lng], {
+             color: 'red',
+             radius: 5
+           }).addTo(aiLayerGroupRef.current);
+        });
+      }
+    }
+  }, [regionData]);
+
+  // Sekme değiştirildiğinde haritayı initialize et
   useEffect(() => {
     if (activeTab !== 'map') return;
 
@@ -93,10 +165,13 @@ function RegionContent() {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        aiLayerGroupRef.current = null; // Katman referansını da sıfırla
       }
     };
   }, [activeTab, initMap]);
 
+
+  // --- TASARIM (JSX) KISMI ---
   return (
     <main className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm border-b border-gray-200">
@@ -134,14 +209,21 @@ function RegionContent() {
         )}
 
         {activeTab === 'analysis' && (
-  <div>
-    {regionData ? (
-      <Analytics data={regionData} />
-    ) : (
-      <p className="text-gray-500">Analiz verisi yukleniyor...</p>
-    )}
-  </div>
-)}
+          <div>
+            {analysisStatus === 'loading' && (
+              <p className="text-gray-500">FastAPI&apos;ye bağlanılıyor...</p>
+            )}
+            {analysisStatus === 'processing' && (
+              <p className="text-blue-500 font-semibold animate-pulse">Yapay zeka verileri işliyor, lütfen bekleyin...</p>
+            )}
+            {analysisStatus === 'error' && (
+              <p className="text-red-500">Analiz sırasında bir hata oluştu.</p>
+            )}
+            {analysisStatus === 'success' && regionData && (
+              <Analytics data={regionData} />
+            )}
+          </div>
+        )}
 
         <div className="card">
           <h3 className="font-semibold mb-3">Bolge Bilgileri</h3>

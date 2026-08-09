@@ -24,6 +24,10 @@ export default function Map({ onRegionSelect }) {
       await import('leaflet/dist/leaflet.css');
       await import('leaflet.heat');
 
+      // Çizim eklentisi ve CSS'ini dinamik olarak yüklüyoruz
+      await import('leaflet-draw/dist/leaflet.draw.css');
+      await import('leaflet-draw');
+
       if (mapInstanceRef.current) return;
 
       const map = L.map(mapRef.current, {
@@ -65,20 +69,44 @@ export default function Map({ onRegionSelect }) {
 
       fireLayer.addTo(map);
 
-      let selectedArea = null;
+      // --- BÖLGE ÇİZİM ARAÇLARI (leaflet-draw) ---
 
-      map.on('click', (e) => {
-        if (selectedArea) map.removeLayer(selectedArea);
+      const drawnItems = new L.FeatureGroup();
+      map.addLayer(drawnItems);
 
-        selectedArea = L.circle(e.latlng, {
-          radius: 5000,
-          color: '#2F6F52',
-          fillColor: '#2F6F52',
-          fillOpacity: 0.15,
-          weight: 2,
-        }).addTo(map);
+      const drawControl = new L.Control.Draw({
+        position: 'bottomright',
+        edit: {
+          featureGroup: drawnItems,
+        },
+        draw: {
+          polygon: true,
+          rectangle: true,
+          circle: false,
+          circlemarker: false,
+          marker: false,
+          polyline: false,
+        },
+      });
 
-        onRegionSelect?.({ lat: e.latlng.lat, lng: e.latlng.lng, radius: 5000 });
+      map.addControl(drawControl);
+
+      map.on(L.Draw.Event.CREATED, (e) => {
+        // Tek seferde tek bir bölge seçili kalsın diye öncekini temizle
+        drawnItems.clearLayers();
+
+        const layer = e.layer;
+        drawnItems.addLayer(layer);
+
+        const geoJsonData = layer.toGeoJSON();
+        const center = layer.getBounds().getCenter();
+
+        onRegionSelect?.({
+          geoJson: geoJsonData,
+          lat: center.lat,
+          lng: center.lng,
+          radius: 1000,
+        });
       });
 
       const updateViewInfo = () => {
