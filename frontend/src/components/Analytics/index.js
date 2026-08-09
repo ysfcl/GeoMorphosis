@@ -13,55 +13,71 @@ import {
   Tooltip,
 } from 'recharts';
 
-const RISK_LABELS = {
-  yok: 'Yok',
-  dusuk: 'Düşük',
-  orta: 'Orta',
-  yuksek: 'Yüksek',
+const ACCENT = {
+  ndvi: '#2F6F52',
+  fire: '#EF4444',
+  pollution: '#3B82F6',
 };
 
-const RISK_WIDTH = {
-  yok: '8%',
-  dusuk: '25%',
-  orta: '55%',
-  yuksek: '90%',
-};
-
-const RISK_COLOR = {
-  yok: 'bg-gray-300',
-  dusuk: 'bg-green-500',
-  orta: 'bg-yellow-500',
-  yuksek: 'bg-red-500',
-};
+const RISK_LABELS = { yok: 'Yok', dusuk: 'Düşük', orta: 'Orta', yuksek: 'Yüksek' };
+const RISK_PERCENT = { yok: 4, dusuk: 28, orta: 58, yuksek: 90 };
 
 function normalizeRisk(value) {
   if (!value) return 'yok';
   return value.toLowerCase();
 }
 
+function KpiCard({ label, value, sublabel, accent }) {
+  return (
+    <div className="relative bg-white border border-[#E2E4E8] rounded-lg p-5 overflow-hidden">
+      <span
+        className="absolute top-0 left-0 right-0 h-[3px]"
+        style={{ backgroundColor: accent }}
+      />
+
+      <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280] mb-3">
+        {label}
+      </p>
+
+      <p className="font-data text-3xl text-[#1C2128] tracking-tight">
+        {value}
+      </p>
+
+      <p className="text-xs text-[#9CA3AF] mt-2">
+        {sublabel}
+      </p>
+    </div>
+  );
+}
+
+function RiskBar({ percent, accent }) {
+  return (
+    <div className="w-full h-2 bg-[#F0F1F3] rounded-full overflow-hidden">
+      <div
+        className="h-full rounded-full transition-all duration-500"
+        style={{ width: `${percent}%`, backgroundColor: accent }}
+      />
+    </div>
+  );
+}
+
 export default function Analytics({ data }) {
   if (!data) return null;
 
   const ndviHistory = [
-    { ay: 'Ocak', deger: 0.42 },
-    { ay: 'Şubat', deger: 0.48 },
-    { ay: 'Mart', deger: 0.55 },
-    { ay: 'Nisan', deger: 0.63 },
-    { ay: 'Mayıs', deger: data.ndvi_score ?? 0.75 },
+    { ay: 'Oca', deger: 0.42 },
+    { ay: 'Şub', deger: 0.48 },
+    { ay: 'Mar', deger: 0.55 },
+    { ay: 'Nis', deger: 0.63 },
+    { ay: 'May', deger: data.ndvi_score ?? 0.75 },
   ];
 
   const currentRisk = normalizeRisk(data.fire_risk);
   const currentPollution = normalizeRisk(data.pollution_level);
 
-  // Donut chart artık gerçek verilerle besleniyor (sabit değerler değil)
-
   const ndviPercent = Math.round((data.ndvi_score ?? 0) * 100);
-
-  const riskToScore = { yok: 0, dusuk: 15, orta: 50, yuksek: 85 };
-
-  const firePercent = riskToScore[currentRisk];
-  const pollutionPercent = riskToScore[currentPollution];
-
+  const firePercent = RISK_PERCENT[currentRisk];
+  const pollutionPercent = RISK_PERCENT[currentPollution];
   const total = ndviPercent + firePercent + pollutionPercent || 1;
 
   const aiData = [
@@ -70,142 +86,125 @@ export default function Analytics({ data }) {
     { ad: 'Kirlilik', deger: Math.round((pollutionPercent / total) * 100) },
   ];
 
-  const COLORS = ['#22c55e', '#ef4444', '#eab308'];
+  const PIE_COLORS = [ACCENT.ndvi, ACCENT.fire, ACCENT.pollution];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
+
       {/* Başlık */}
 
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-5 border-b border-[#E2E4E8]">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">
+          <p className="text-[11px] tracking-[0.15em] uppercase text-[#6B7280] mb-1">
+            Bölge Analizi
+          </p>
+
+          <h1 className="text-xl font-semibold text-[#1C2128] tracking-tight">
             GeoMorphosis Analiz Paneli
           </h1>
-
-          <p className="text-gray-500 mt-2">
-            Uydu verileri ve yapay zekâ destekli çevresel analiz
-          </p>
         </div>
 
-        <span className="px-4 py-2 rounded-full bg-green-100 text-green-700 font-semibold">
-          ● {data.status ?? 'Analiz tamamlandı'}
-        </span>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#EAF4EF] border border-[#2F6F52]/20 w-fit">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#2F6F52]" />
+
+          <span className="text-[11px] tracking-wide text-[#2F6F52] font-medium uppercase">
+            {data.status ?? 'Tamamlandı'}
+          </span>
+        </div>
       </div>
 
-      {/* Üst Kartlar */}
+      {/* KPI Kartları */}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-        <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-3xl p-6 text-white shadow-xl">
-          <p className="text-sm opacity-80">
-            🌿 NDVI Skoru
-          </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <KpiCard
+          label="NDVI Skoru"
+          value={data.ndvi_score ?? '0.00'}
+          sublabel="Bitki örtüsü yoğunluğu"
+          accent={ACCENT.ndvi}
+        />
 
-          <h2 className="text-5xl font-bold mt-3">
-            {data.ndvi_score ?? '0'}
-          </h2>
+        <KpiCard
+          label="Yangın Riski"
+          value={RISK_LABELS[currentRisk]}
+          sublabel="Risk seviyesi"
+          accent={ACCENT.fire}
+        />
 
-          <p className="mt-4 text-sm opacity-80">
-            Bitki örtüsü yoğunluğu
-          </p>
-        </div>
+        <KpiCard
+          label="Kirlilik"
+          value={RISK_LABELS[currentPollution]}
+          sublabel="Çevresel etki"
+          accent={ACCENT.pollution}
+        />
 
-        <div className="bg-gradient-to-r from-red-500 to-rose-600 rounded-3xl p-6 text-white shadow-xl">
-          <p className="text-sm opacity-80">
-            🔥 Yangın Riski
-          </p>
-
-          <h2 className="text-4xl font-bold mt-3">
-            {RISK_LABELS[currentRisk]}
-          </h2>
-
-          <p className="mt-4 text-sm opacity-80">
-            Risk seviyesi
-          </p>
-        </div>
-
-        <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-3xl p-6 text-white shadow-xl">
-          <p className="text-sm opacity-80">
-            🏭 Kirlilik
-          </p>
-
-          <h2 className="text-4xl font-bold mt-3">
-            {RISK_LABELS[currentPollution]}
-          </h2>
-
-          <p className="mt-4 text-sm opacity-80">
-            Çevresel etki
-          </p>
-        </div>
-
-        <div className="bg-gradient-to-r from-blue-500 to-cyan-600 rounded-3xl p-6 text-white shadow-xl">
-          <p className="text-sm opacity-80">
-            📍 Bölge
-          </p>
-
-          <p className="text-lg font-bold mt-3 break-words">
-            {data.region_name ?? 'Bilinmiyor'}
-          </p>
-
-          <p className="mt-4 text-sm opacity-80">
-            Analiz alanı
-          </p>
-        </div>
+        <KpiCard
+          label="Koordinat"
+          value={`${(data.lat ?? 0).toFixed(2)}, ${(data.lon ?? 0).toFixed(2)}`}
+          sublabel={data.region_name ?? 'Analiz alanı'}
+          accent="#9CA3AF"
+        />
       </div>
 
       {/* NDVI Grafiği */}
 
-      <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
+      <div className="bg-white border border-[#E2E4E8] rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-2xl font-bold text-gray-800">
-            🌿 NDVI Değişim Analizi
-          </h3>
+          <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280]">
+            NDVI Değişim Analizi
+          </p>
 
-          <span className="px-4 py-2 rounded-full bg-green-100 text-green-700">
-            Son değer: {data.ndvi_score}
+          <span className="font-data text-sm text-[#2F6F52] font-medium">
+            {data.ndvi_score}
           </span>
         </div>
 
-        <div className="h-[420px]">
+        <div className="h-[320px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={ndviHistory}>
               <defs>
-                <linearGradient
-                  id="ndviGradient"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop
-                    offset="5%"
-                    stopColor="#22c55e"
-                    stopOpacity={0.6}
-                  />
-
-                  <stop
-                    offset="95%"
-                    stopColor="#22c55e"
-                    stopOpacity={0}
-                  />
+                <linearGradient id="ndviGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#2F6F52" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#2F6F52" stopOpacity={0} />
                 </linearGradient>
               </defs>
 
               <CartesianGrid
-                strokeDasharray="4 4"
-                stroke="#e5e7eb"
+                strokeDasharray="3 3"
+                stroke="#F0F1F3"
+                vertical={false}
               />
 
-              <XAxis dataKey="ay" />
+              <XAxis
+                dataKey="ay"
+                stroke="#9CA3AF"
+                tick={{ fontSize: 11 }}
+                axisLine={{ stroke: '#E2E4E8' }}
+                tickLine={false}
+              />
 
-              <YAxis domain={[0, 1]} />
+              <YAxis
+                domain={[0, 1]}
+                stroke="#9CA3AF"
+                tick={{ fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
 
-              <Tooltip />
+              <Tooltip
+                contentStyle={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E4E8',
+                  borderRadius: 6,
+                  fontSize: 12,
+                }}
+                labelStyle={{ color: '#6B7280' }}
+              />
 
               <Area
                 type="monotone"
                 dataKey="deger"
-                stroke="#16a34a"
-                strokeWidth={4}
+                stroke="#2F6F52"
+                strokeWidth={2}
                 fill="url(#ndviGradient)"
               />
             </AreaChart>
@@ -215,87 +214,80 @@ export default function Analytics({ data }) {
 
       {/* Risk Göstergeleri */}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-3xl shadow-xl p-8">
-          <h3 className="text-2xl font-bold mb-8">
-            🔥 Yangın Riski
-          </h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white border border-[#E2E4E8] rounded-lg p-6">
+          <div className="flex items-center justify-between mb-5">
+            <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280]">
+              Yangın Riski
+            </p>
 
-          <div className="w-full bg-gray-200 rounded-full h-8 overflow-hidden">
-            <div
-              className={`${RISK_COLOR[currentRisk]} h-full rounded-full transition-all duration-700`}
-              style={{
-                width: RISK_WIDTH[currentRisk],
-              }}
-            />
+            <span className="text-sm font-medium" style={{ color: ACCENT.fire }}>
+              {RISK_LABELS[currentRisk]}
+            </span>
           </div>
 
-          <p className="text-center text-3xl font-bold mt-8">
-            {RISK_LABELS[currentRisk]}
-          </p>
+          <RiskBar percent={RISK_PERCENT[currentRisk]} accent={ACCENT.fire} />
         </div>
 
-        <div className="bg-white rounded-3xl shadow-xl p-8">
-          <h3 className="text-2xl font-bold mb-8">
-            🏭 Kirlilik Seviyesi
-          </h3>
+        <div className="bg-white border border-[#E2E4E8] rounded-lg p-6">
+          <div className="flex items-center justify-between mb-5">
+            <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280]">
+              Kirlilik Seviyesi
+            </p>
 
-          <div className="w-full bg-gray-200 rounded-full h-8 overflow-hidden">
-            <div
-              className={`${RISK_COLOR[currentPollution]} h-full rounded-full transition-all duration-700`}
-              style={{
-                width: RISK_WIDTH[currentPollution],
-              }}
-            />
+            <span className="text-sm font-medium" style={{ color: ACCENT.pollution }}>
+              {RISK_LABELS[currentPollution]}
+            </span>
           </div>
 
-          <p className="text-center text-3xl font-bold mt-8">
-            {RISK_LABELS[currentPollution]}
-          </p>
+          <RiskBar percent={RISK_PERCENT[currentPollution]} accent={ACCENT.pollution} />
         </div>
       </div>
 
       {/* Yapay Zekâ Dağılımı */}
 
-      <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
-        <h3 className="text-2xl font-bold mb-8 text-gray-800">
-          📊 Yapay Zekâ Tespit Dağılımı
-        </h3>
+      <div className="bg-white border border-[#E2E4E8] rounded-lg p-6">
+        <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280] mb-6">
+          Yapay Zekâ Tespit Dağılımı
+        </p>
 
-        <div className="h-[420px]">
+        <div className="h-[320px]">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={aiData}
                 dataKey="deger"
                 nameKey="ad"
-                innerRadius={90}
-                outerRadius={150}
-                paddingAngle={5}
-                label={({ ad, percent }) =>
-                  `${ad} %${(percent * 100).toFixed(0)}`
-                }
+                innerRadius={75}
+                outerRadius={125}
+                paddingAngle={3}
+                stroke="#FFFFFF"
+                strokeWidth={2}
+                label={({ ad, percent }) => `${ad} ${(percent * 100).toFixed(0)}%`}
+                labelLine={{ stroke: '#D3D6DC' }}
               >
                 {aiData.map((entry, index) => (
-                  <Cell
-                    key={index}
-                    fill={COLORS[index]}
-                  />
+                  <Cell key={index} fill={PIE_COLORS[index]} />
                 ))}
               </Pie>
 
-              <Tooltip />
+              <Tooltip
+                contentStyle={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E4E8',
+                  borderRadius: 6,
+                  fontSize: 12,
+                }}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>
       </div>
 
       {data.timestamp && (
-        <div className="text-center text-sm text-gray-500">
-          Son güncelleme
-          <br />
-          {new Date(data.timestamp).toLocaleString('tr-TR')}
-        </div>
+        <p className="text-xs text-[#9CA3AF] text-center">
+          Son güncelleme · {new Date(data.timestamp).toLocaleString('tr-TR')}
+        </p>
       )}
     </div>
   );

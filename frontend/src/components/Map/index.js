@@ -14,6 +14,7 @@ export default function Map({ onRegionSelect }) {
     pollution: false,
     vegetation: false,
   });
+  const [viewInfo, setViewInfo] = useState({ zoom: 6, lat: 39.0, lon: 35.0 });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -29,130 +30,71 @@ export default function Map({ onRegionSelect }) {
         zoomControl: false,
       }).setView([39.0, 35.0], 6);
 
-      L.control.zoom({
-        position: 'bottomleft',
-      }).addTo(map);
-
-      // Normal harita
+      L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
       const normalMap = L.tileLayer(
         'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        {
-          attribution: '&copy; OpenStreetMap',
-          maxZoom: 19,
-        }
+        { attribution: '&copy; OpenStreetMap', maxZoom: 19 }
       );
-
-      // Uydu katmanı
 
       const satelliteMap = L.tileLayer(
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        {
-          attribution: 'Tiles © Esri',
-          maxZoom: 19,
-        }
+        { attribution: 'Tiles © Esri', maxZoom: 19 }
       );
 
       normalMap.addTo(map);
 
-      // Heatmap veri noktaları hazırlanıyor: [lat, lng, intensity]
+      const firePoints = mockHeatmapData.map((p) => [p.lat, p.lng, p.intensity]);
+      const pollutionPoints = mockHeatmapData.map((p) => [p.lat + 0.2, p.lng, 0.5]);
+      const vegetationPoints = mockHeatmapData.map((p) => [p.lat - 0.2, p.lng, 0.75]);
 
-      const firePoints = mockHeatmapData.map((p) => [
-        p.lat,
-        p.lng,
-        p.intensity,
-      ]);
+      const fireLayer = L.heatLayer(firePoints, {
+        radius: 38, blur: 28, maxZoom: 9, minOpacity: 0.35,
+        gradient: { 0.2: '#22c55e', 0.5: '#f59e0b', 0.8: '#ef4444' },
+      });
 
-      const pollutionPoints = mockHeatmapData.map((p) => [
-        p.lat + 0.2,
-        p.lng,
-        0.5,
-      ]);
+      const pollutionLayer = L.heatLayer(pollutionPoints, {
+        radius: 38, blur: 28, maxZoom: 9, minOpacity: 0.35,
+        gradient: { 0.3: '#93c5fd', 0.6: '#3b82f6', 1.0: '#1e40af' },
+      });
 
-      const vegetationPoints = mockHeatmapData.map((p) => [
-        p.lat - 0.2,
-        p.lng,
-        0.75,
-      ]);
-
-      // Yangın heatmap (kırmızı-turuncu-sarı)
-
-const fireLayer = L.heatLayer(firePoints, {
-  radius: 38,
-  blur: 28,
-  maxZoom: 9,
-  minOpacity: 0.35,
-  gradient: {
-    0.2: '#22c55e',
-    0.5: '#f59e0b',
-    0.8: '#ef4444',
-  },
-});
-
-// Kirlilik heatmap (mavi tonları)
-
-const pollutionLayer = L.heatLayer(pollutionPoints, {
-  radius: 38,
-  blur: 28,
-  maxZoom: 9,
-  minOpacity: 0.35,
-  gradient: {
-    0.3: '#93c5fd',
-    0.6: '#3b82f6',
-    1.0: '#1e40af',
-  },
-});
-
-// NDVI heatmap (yeşil tonları)
-
-const vegetationLayer = L.heatLayer(vegetationPoints, {
-  radius: 38,
-  blur: 28,
-  maxZoom: 9,
-  minOpacity: 0.35,
-  gradient: {
-    0.3: '#bbf7d0',
-    0.6: '#4ade80',
-    1.0: '#15803d',
-  },
-});
-
-      // Varsayılan olarak yangın katmanı açık
+      const vegetationLayer = L.heatLayer(vegetationPoints, {
+        radius: 38, blur: 28, maxZoom: 9, minOpacity: 0.35,
+        gradient: { 0.3: '#bbf7d0', 0.6: '#4ade80', 1.0: '#15803d' },
+      });
 
       fireLayer.addTo(map);
-
-      // Bölge seçimi
 
       let selectedArea = null;
 
       map.on('click', (e) => {
-        if (selectedArea) {
-          map.removeLayer(selectedArea);
-        }
+        if (selectedArea) map.removeLayer(selectedArea);
 
         selectedArea = L.circle(e.latlng, {
           radius: 5000,
-          color: '#2563eb',
-          fillColor: '#2563eb',
-          fillOpacity: 0.2,
-          weight: 3,
+          color: '#2F6F52',
+          fillColor: '#2F6F52',
+          fillOpacity: 0.15,
+          weight: 2,
         }).addTo(map);
 
-        onRegionSelect?.({
-          lat: e.latlng.lat,
-          lng: e.latlng.lng,
-          radius: 5000,
-        });
+        onRegionSelect?.({ lat: e.latlng.lat, lng: e.latlng.lng, radius: 5000 });
       });
 
-      mapInstanceRef.current = map;
-      layersRef.current = {
-        normalMap,
-        satelliteMap,
-        fireLayer,
-        pollutionLayer,
-        vegetationLayer,
+      const updateViewInfo = () => {
+        const center = map.getCenter();
+        setViewInfo({
+          zoom: map.getZoom(),
+          lat: center.lat,
+          lon: center.lng,
+        });
       };
+
+      map.on('moveend zoomend', updateViewInfo);
+      updateViewInfo();
+
+      mapInstanceRef.current = map;
+      layersRef.current = { normalMap, satelliteMap, fireLayer, pollutionLayer, vegetationLayer };
     };
 
     initMap();
@@ -195,21 +137,16 @@ const vegetationLayer = L.heatLayer(vegetationPoints, {
 
     setActiveOverlays((prev) => {
       const next = { ...prev, [key]: !prev[key] };
-
-      if (next[key]) {
-        layer.addTo(map);
-      } else {
-        map.removeLayer(layer);
-      }
-
+      if (next[key]) layer.addTo(map);
+      else map.removeLayer(layer);
       return next;
     });
   };
 
   const overlayOptions = [
-    { key: 'fire', label: 'Yangın Katmanı', color: 'bg-red-500' },
-    { key: 'pollution', label: 'Kirlilik Katmanı', color: 'bg-blue-500' },
-    { key: 'vegetation', label: 'NDVI (Bitki Örtüsü)', color: 'bg-green-500' },
+    { key: 'fire', label: 'Yangın Katmanı', color: '#ef4444' },
+    { key: 'pollution', label: 'Kirlilik Katmanı', color: '#3b82f6' },
+    { key: 'vegetation', label: 'NDVI (Bitki Örtüsü)', color: '#22c55e' },
   ];
 
   return (
@@ -217,63 +154,89 @@ const vegetationLayer = L.heatLayer(vegetationPoints, {
 
       <div ref={mapRef} id="map" className="w-full h-full" />
 
-      {/* Katman kontrol paneli */}
+      {/* Kontrol paneli */}
 
-      <div className="absolute top-24 left-4 z-[1000] bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-4 w-64">
+      <div className="absolute top-20 left-4 z-[1000] w-64 bg-white border border-[#E2E4E8] rounded-lg shadow-sm">
 
-        <h3 className="text-sm font-bold text-gray-700 mb-3">
-          Harita Görünümü
-        </h3>
+        <div className="p-4 border-b border-[#E2E4E8]">
+          <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280] mb-3">
+            Harita Görünümü
+          </p>
 
-        <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
-
-          <button
-            onClick={() => handleBaseMapChange('normal')}
-            className={`flex-1 text-sm font-medium py-2 rounded-lg transition ${
-              baseMap === 'normal'
-                ? 'bg-white shadow text-gray-900'
-                : 'text-gray-500'
-            }`}
-          >
-            Normal
-          </button>
-
-          <button
-            onClick={() => handleBaseMapChange('satellite')}
-            className={`flex-1 text-sm font-medium py-2 rounded-lg transition ${
-              baseMap === 'satellite'
-                ? 'bg-white shadow text-gray-900'
-                : 'text-gray-500'
-            }`}
-          >
-            Uydu
-          </button>
-
-        </div>
-
-        <h3 className="text-sm font-bold text-gray-700 mb-3">
-          Katmanlar
-        </h3>
-
-        <div className="space-y-2">
-
-          {overlayOptions.map((option) => (
+          <div className="flex gap-1 bg-[#F4F5F7] rounded-md p-1">
             <button
-              key={option.key}
-              onClick={() => handleOverlayToggle(option.key)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition ${
-                activeOverlays[option.key]
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+              onClick={() => handleBaseMapChange('normal')}
+              className={`flex-1 text-xs font-medium py-1.5 rounded transition ${
+                baseMap === 'normal'
+                  ? 'bg-white text-[#1C2128] shadow-sm'
+                  : 'text-[#6B7280] hover:text-[#1C2128]'
               }`}
             >
-              <span className={`w-3 h-3 rounded-full ${option.color}`} />
-              {option.label}
+              Normal
             </button>
-          ))}
 
+            <button
+              onClick={() => handleBaseMapChange('satellite')}
+              className={`flex-1 text-xs font-medium py-1.5 rounded transition ${
+                baseMap === 'satellite'
+                  ? 'bg-white text-[#1C2128] shadow-sm'
+                  : 'text-[#6B7280] hover:text-[#1C2128]'
+              }`}
+            >
+              Uydu
+            </button>
+          </div>
         </div>
 
+        <div className="p-4">
+          <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280] mb-3">
+            Katmanlar
+          </p>
+
+          <div className="space-y-1">
+            {overlayOptions.map((option) => {
+              const active = activeOverlays[option.key];
+
+              return (
+                <div
+                  key={option.key}
+                  onClick={() => handleOverlayToggle(option.key)}
+                  className="flex items-center justify-between py-2 px-1 rounded hover:bg-[#F4F5F7] cursor-pointer transition"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: option.color }}
+                    />
+                    <span className="text-xs text-[#1C2128]">
+                      {option.label}
+                    </span>
+                  </div>
+
+                  <div
+                    className="relative w-8 h-[18px] rounded-full transition-colors shrink-0"
+                    style={{ backgroundColor: active ? option.color : '#D3D6DC' }}
+                  >
+                    <span
+                      className={`absolute top-[2px] w-[14px] h-[14px] bg-white rounded-full transition-all ${
+                        active ? 'left-[16px]' : 'left-[2px]'
+                      }`}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+      </div>
+
+      {/* Canlı koordinat / zoom okuması */}
+
+      <div className="absolute bottom-4 right-4 z-[1000] bg-white border border-[#E2E4E8] rounded-md px-3 py-1.5 shadow-sm">
+        <p className="text-[11px] text-[#6B7280] tabular-nums">
+          zoom: {viewInfo.zoom.toFixed(2)} &nbsp;·&nbsp; lat, lon: {viewInfo.lat.toFixed(2)}, {viewInfo.lon.toFixed(2)}
+        </p>
       </div>
 
     </div>

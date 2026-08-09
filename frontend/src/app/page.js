@@ -20,16 +20,11 @@ export default function Home() {
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          coordinates: selectedRegion,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coordinates: selectedRegion }),
       });
 
       const data = await res.json();
-
       setAnalysisResult(data);
     } catch (err) {
       console.error('Analiz hatası:', err);
@@ -48,48 +43,48 @@ export default function Home() {
   };
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-gray-100">
+    <main className="fixed inset-0 overflow-hidden bg-[#F4F5F7]">
 
-      {/* Harita - Tam ekran */}
+      {/* Harita */}
 
       <div className="absolute inset-0 z-0">
         <Map onRegionSelect={setSelectedRegion} />
       </div>
 
-      {/* Üst Menü - Haritanın üzerinde yüzen bar */}
+      {/* Üst Menü */}
 
-      <nav className="absolute top-0 left-0 right-0 z-[1000] h-20 bg-white/90 backdrop-blur-md shadow-sm border-b border-gray-200">
-        <div className="h-full px-8 flex items-center justify-between">
+      <nav className="absolute top-0 left-0 right-0 z-[1000] h-16 bg-white border-b border-[#E2E4E8]">
+        <div className="h-full px-6 flex items-center justify-between">
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
 
-            <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-md">
-              <span className="text-white text-2xl font-bold">
+            <div className="w-9 h-9 rounded-md bg-[#2F6F52] flex items-center justify-center">
+              <span className="text-white text-sm font-bold">
                 G
               </span>
             </div>
 
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                GeoMorphosis
-              </h1>
+              <p className="text-sm font-semibold tracking-wide text-[#1C2128] leading-tight">
+                GEOMORPHOSIS
+              </p>
 
-              <p className="text-lg text-gray-500">
+              <p className="text-[10px] tracking-[0.1em] uppercase text-[#6B7280]">
                 Çevresel İzleme Platformu
               </p>
             </div>
 
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
 
-            <p className="text-xl text-gray-500 hidden md:block">
+            <p className="text-[11px] tracking-[0.1em] uppercase text-[#6B7280] hidden md:block">
               Uydu Analiz Sistemi
             </p>
 
             <button
               onClick={() => setPanelOpen((prev) => !prev)}
-              className="bg-gray-900 text-white px-5 py-3 rounded-xl text-sm font-semibold hover:bg-black transition"
+              className="border border-[#D3D6DC] rounded-md px-3 py-1.5 text-[11px] tracking-[0.08em] uppercase font-medium text-[#1C2128] hover:bg-[#F4F5F7] transition"
             >
               {panelOpen ? 'Paneli Gizle' : 'Paneli Göster'}
             </button>
@@ -99,106 +94,87 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Sağ panel - Haritanın üzerinde yüzen kart */}
+      {/* Sağ panel */}
 
       {panelOpen && (
-        <div className="absolute top-28 right-4 z-[1000] w-full max-w-sm max-h-[calc(100vh-8rem)] overflow-y-auto">
+        <div className="absolute top-20 right-4 z-[1000] w-80 max-h-[calc(100vh-6rem)] overflow-y-auto">
 
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl p-8 flex flex-col gap-6">
+          <div className="bg-white border border-[#E2E4E8] rounded-lg shadow-sm">
 
-            <h2 className="text-3xl font-bold">
-              Analizi Başlat
-            </h2>
+            <div className="p-5 border-b border-[#E2E4E8]">
+              <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280] mb-1">
+                Bölge Analizi
+              </p>
 
-            {selectedRegion ? (
-              <>
-                <div className="bg-gray-50 rounded-2xl p-6">
+              <h2 className="text-base font-semibold text-[#1C2128]">
+                Analizi Başlat
+              </h2>
+            </div>
 
-                  <h3 className="text-xl font-semibold mb-4">
-                    Seçilen koordinatlar
-                  </h3>
+            <div className="p-5 space-y-5">
 
-                  <div className="space-y-4">
-
-                    <div>
-                      <p className="text-gray-500">
-                        Enlem
-                      </p>
-
-                      <p className="text-2xl font-bold">
+              {selectedRegion ? (
+                <>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between py-2 border-b border-[#F0F1F3]">
+                      <span className="text-xs text-[#6B7280]">Enlem</span>
+                      <span className="text-sm font-medium text-[#1C2128]">
                         {selectedRegion.lat.toFixed(4)}
-                      </p>
+                      </span>
                     </div>
 
-                    <div>
-                      <p className="text-gray-500">
-                        Boylam
-                      </p>
-
-                      <p className="text-2xl font-bold">
-                        {(
-                          selectedRegion.lng ||
-                          selectedRegion.lon
-                        ).toFixed(4)}
-                      </p>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-xs text-[#6B7280]">Boylam</span>
+                      <span className="text-sm font-medium text-[#1C2128]">
+                        {(selectedRegion.lng || selectedRegion.lon).toFixed(4)}
+                      </span>
                     </div>
-
                   </div>
 
+                  <button
+                    onClick={handleAnalyze}
+                    disabled={loading}
+                    className="w-full bg-[#2F6F52] text-white rounded-md py-2.5 text-xs tracking-[0.08em] uppercase font-semibold hover:bg-[#255A42] transition disabled:opacity-50"
+                  >
+                    {loading ? 'Analiz Yapılıyor...' : 'AI Analizini Başlat'}
+                  </button>
+                </>
+              ) : (
+                <div className="bg-[#F4F5F7] rounded-md p-4 text-xs text-[#6B7280]">
+                  Harita üzerinden bir bölge seçin.
                 </div>
+              )}
 
-                <button
-                  onClick={handleAnalyze}
-                  disabled={loading}
-                  className="w-full bg-blue-600 text-white py-5 rounded-2xl text-xl font-semibold hover:bg-blue-700 transition disabled:opacity-60"
-                >
-                  {loading
-                    ? 'Analiz yapılıyor...'
-                    : 'AI Analizini Başlat'}
-                </button>
-              </>
-            ) : (
-              <div className="bg-gray-50 rounded-2xl p-6 text-gray-500">
-                Harita üzerinden bir bölge seçin.
-              </div>
-            )}
+              {analysisResult && (
+                <div className="space-y-3">
+                  <div className="border border-[#2F6F52]/25 bg-[#EAF4EF] rounded-md p-4">
+                    <p className="text-xs font-semibold text-[#2F6F52] uppercase tracking-wide mb-1">
+                      Analiz Tamamlandı
+                    </p>
 
-            {analysisResult && (
-              <div>
+                    <p className="text-xs text-[#4B5563]">
+                      Detaylı grafikler ve raporlar analiz ekranında görüntülenecektir.
+                    </p>
+                  </div>
 
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
-
-                  <h3 className="font-bold text-green-700 text-lg">
-                    ✓ Analiz tamamlandı
-                  </h3>
-
-                  <p className="text-gray-600 mt-2">
-                    Detaylı grafikler ve raporlar
-                    analiz ekranında görüntülenecektir.
-                  </p>
-
+                  <button
+                    onClick={handleDetail}
+                    className="w-full border border-[#1C2128] text-[#1C2128] rounded-md py-2.5 text-xs tracking-[0.08em] uppercase font-semibold hover:bg-[#1C2128] hover:text-white transition"
+                  >
+                    Detaylı Analizi Aç
+                  </button>
                 </div>
+              )}
 
-                <button
-                  onClick={handleDetail}
-                  className="w-full mt-4 bg-gray-900 text-white py-5 rounded-2xl text-lg font-semibold hover:bg-black transition"
-                >
-                  Detaylı Analizi Aç
-                </button>
+              <div className="bg-[#F4F5F7] rounded-md p-4">
+                <p className="text-[11px] font-semibold text-[#1C2128] uppercase tracking-wide mb-1">
+                  Bilgi
+                </p>
 
+                <p className="text-xs text-[#6B7280]">
+                  Analiz sonuçları ayrı bir sayfada gösterilecektir.
+                </p>
               </div>
-            )}
-
-            <div className="bg-blue-50 rounded-2xl p-6">
-
-              <h3 className="font-bold text-blue-700 text-lg">
-                Bilgi
-              </h3>
-
-              <p className="text-gray-600 mt-3">
-                Analiz sonuçları ayrı bir sayfada
-                gösterilecektir.
-              </p>
 
             </div>
 
