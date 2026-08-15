@@ -49,6 +49,9 @@ venv/
 data/cache/*
 !data/cache/.gitkeep
 
+# runtime logs
+ai-engine/data/*.log
+
 # models
 ai-engine/models/*.pt
 
