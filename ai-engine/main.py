@@ -13,6 +13,7 @@ import uuid
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils.index import init_db, get_db_connection
 from services.satellite_api import download_satellite_series, get_latest_image
+from services.analysis_service import analyze_region as run_region_analysis
 
 # FastAPI uygulamasını başlat
 app = FastAPI(
@@ -30,7 +31,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Redis bağlantısı (Docker üzerinden, Node.js Worker ile haberleşmek için)
+# Redis bağlantısı (Node.js Worker ile haberleşmek için)
+# Native geliştirmede localhost, Docker compose'da 'redis' servis adı kullanılır.
 # decode_responses=True sayesinde veriler byte yerine string olarak gelir
 # Lokal çalıştırmada REDIS_HOST ortam değişkeni boşsa 127.0.0.1 kullanılır.
 import os
@@ -49,6 +51,11 @@ class SubscribeRequest(BaseModel):
     email: str
     region_id: str
     notification_type: str = "email"
+
+class ProcessRequest(BaseModel):
+    lat: float
+    lon: float
+    buffer_meters: int = 1000
 
 # Uygulama ayağa kalktığında veritabanı tablolarının hazır olduğundan emin ol
 @app.on_event("startup")
@@ -109,6 +116,20 @@ def get_status(task_id: str):
         task["result"] = json.loads(task["result"])
 
     return task
+
+
+# --- GERÇEK ANALİZ ENDPOINT'İ (Worker tarafından çağrılır) ---
+# Mutfak (Worker) buraya koordinat gönderir, gerçek uydu tabanlı analiz sonucu döner.
+@app.post("/api/process")
+def process_region(request: ProcessRequest):
+    try:
+        return run_region_analysis(
+            lat=request.lat,
+            lon=request.lon,
+            buffer_meters=request.buffer_meters,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Mevcut satellite endpoint'ini bozmadan koruyoruz
