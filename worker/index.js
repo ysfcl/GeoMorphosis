@@ -4,6 +4,8 @@ const notifier = require('./services/notifier');
 // Docker-compose üzerinden gelen Redis adresini alıyoruz
 const redisHost = process.env.REDIS_HOST || 'localhost';
 const redisPort = process.env.REDIS_PORT || 6379;
+// Railway gibi platformlarda Redis sifre korumali olabilir
+const redisPassword = process.env.REDIS_PASSWORD;
 
 // Yapay zeka motorunun (Vezne/FastAPI) adresi
 const aiEngineUrl = process.env.AI_ENGINE_URL || 'http://localhost:8000';
@@ -16,7 +18,7 @@ const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 const notificationInternalSecret = process.env.NOTIFICATION_INTERNAL_SECRET;
 
 const redisClient = createClient({
-    url: `redis://${redisHost}:${redisPort}`
+    url: `redis://${redisPassword ? `default:${redisPassword}@` : ''}${redisHost}:${redisPort}`
 });
 
 redisClient.on('error', (err) => console.log('Redis İstemci Hatası:', err));

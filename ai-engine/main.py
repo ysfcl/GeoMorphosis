@@ -51,8 +51,16 @@ app.add_middleware(
 # bağlanamıyordu. decode_responses=True sayesinde veriler string olarak gelir.
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+# Railway gibi platformlarda Redis sifre korumali gelir; sifre yoksa None gecer.
+REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD") or None
 
-r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
+r = redis.Redis(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    db=0,
+    decode_responses=True,
+    password=REDIS_PASSWORD,
+)
 
 # Güncellenmiş Request Modeli (Haritada kısıtlanan alan bbox ve geoJson parametreleri eklendi)
 class AnalyzeRequest(BaseModel):
