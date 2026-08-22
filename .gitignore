@@ -49,6 +49,9 @@ venv/
 data/cache/*
 !data/cache/.gitkeep
 
+# runtime logs
+ai-engine/data/*.log
+
 # models
 # Egitilmis agirliklar (ai-engine/models/*.pt) bilerek repoda tutuluyor;
 # ekibin modeli calistirabilmesi icin gerekli.

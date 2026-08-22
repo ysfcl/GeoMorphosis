@@ -6,6 +6,7 @@ import { Sun, Moon, Send, Info, Bell, Mail, Monitor, X } from 'lucide-react';
 import Map from '@/components/Map';
 import Toast from '@/components/Toast';
 import { getUserId } from '@/lib/userId';
+import { MAX_SELECTION_AREA_KM2 } from '@/lib/mapLimits';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -13,15 +14,16 @@ function resolveCoordinates(region) {
   if (!region) return null;
 
   if (typeof region.lat === 'number') {
-    const lng = region.lng ?? region.lon;
-    if (typeof lng === 'number') return { lat: region.lat, lng };
+    // Standart anahtar lon; eski payload'lar icin lng/longitude toleransı korunur.
+    const lon = region.lon ?? region.lng;
+    if (typeof lon === 'number') return { lat: region.lat, lon };
   }
 
   const coords = region.geoJson?.geometry?.coordinates?.[0]?.[0]
     ?? region.geometry?.coordinates?.[0]?.[0];
 
   if (Array.isArray(coords) && coords.length >= 2) {
-    return { lat: coords[1], lng: coords[0] };
+    return { lat: coords[1], lon: coords[0] };
   }
 
   return null;
@@ -83,7 +85,7 @@ export default function Home() {
       pollInFlightRef.current = true;
 
       try {
-        const res = await fetch(`/api/analyze?task_id=${id}&user_id=${getUserId()}&lat=${coordinates.lat}&lng=${coordinates.lng}`);
+        const res = await fetch(`/api/analyze?task_id=${id}&user_id=${getUserId()}&lat=${coordinates.lat}&lon=${coordinates.lon}`);
         const statusData = await res.json();
 
         if (statusData.status === 'completed') {
@@ -144,7 +146,7 @@ export default function Home() {
   const handleDetail = () => {
     const coordinates = resolveCoordinates(selectedRegion);
     if (!coordinates) return;
-    const params = new URLSearchParams({ lat: String(coordinates.lat), lon: String(coordinates.lng) });
+    const params = new URLSearchParams({ lat: String(coordinates.lat), lon: String(coordinates.lon) });
     if (taskId) params.set('task_id', taskId);
     router.push(`/region?${params.toString()}`);
   };
@@ -187,7 +189,7 @@ export default function Home() {
       <nav className="absolute top-0 left-0 right-0 z-[1000] h-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md shadow-sm border-b border-gray-200 dark:border-gray-800 transition-colors duration-300">
         <div className="h-full px-8 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-md"><span className="text-white text-2xl font-bold">G</span></div>
+            <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-md">{/*<span className="text-white text-2xl font-bold">G</span>*/}<img src="logo.png" alt="Logo" className="w-full h-full object-contain" /></div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">GeoMorphosis</h1>
               <p className="text-lg text-gray-500 dark:text-gray-400 hidden sm:block">Çevresel İzleme Platformu</p>
@@ -253,10 +255,34 @@ export default function Home() {
                         </span>
                       </div>
                       <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                        <span className="text-gray-500 dark:text-gray-400 font-medium text-sm">Boylam (Lng)</span>
+                        <span className="text-gray-500 dark:text-gray-400 font-medium text-sm">Boylam (Lon)</span>
                         <span className="font-bold text-gray-800 dark:text-gray-100 font-mono text-sm">
-                          {resolveCoordinates(selectedRegion).lng.toFixed(6)}
+                          {resolveCoordinates(selectedRegion).lon.toFixed(6)}
                         </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Secilen alani ve izinli maksimum siniri goster */}
+                  {typeof selectedRegion.area_sq_meters === 'number' && (
+                    <div className="mt-3 bg-white dark:bg-gray-800 p-3 rounded-xl border border-blue-100 dark:border-blue-900 shadow-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500 dark:text-gray-400 font-medium text-sm">Seçilen Alan</span>
+                        <span className="font-bold text-blue-600 dark:text-blue-400 font-mono text-sm">
+                          {(selectedRegion.area_sq_meters / 1000000).toFixed(2)} km²
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center mt-1">
+                        <span className="text-gray-400 dark:text-gray-500 text-xs">Maksimum</span>
+                        <span className="text-gray-400 dark:text-gray-500 font-mono text-xs">
+                          {MAX_SELECTION_AREA_KM2} km²
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-500 rounded-full"
+                          style={{ width: `${Math.min(100, (selectedRegion.area_sq_meters / (selectedRegion.max_area_sq_meters || 25000000)) * 100)}%` }}
+                        />
                       </div>
                     </div>
                   )}
@@ -373,7 +399,7 @@ export default function Home() {
             <h3 className="font-bold text-green-700 dark:text-green-400 text-lg">✓ Analiz tamamlandı</h3>
             <div className="mt-3 space-y-2 text-gray-700 dark:text-gray-200">
               <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">NDVI skoru</span><span className="font-semibold">{analysisResult.ndvi_score}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Yangın riski</span><span className="font-semibold">{RISK_LABELS[analysisResult.fire_risk] ?? '-'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Ormansızlaşma</span><span className="font-semibold">{RISK_LABELS[analysisResult.deforestation_risk] ?? '-'}</span></div>
               <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Kirlilik</span><span className="font-semibold">{RISK_LABELS[analysisResult.pollution_level] ?? '-'}</span></div>
             </div>
           </div>

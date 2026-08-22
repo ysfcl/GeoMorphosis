@@ -1,0 +1,48 @@
+{
+  "location": "gemlik_korfezi",
+  "dataset": "pollution_dataset",
+  "split": "test",
+  "center": [
+    40.421,
+    29.12
+  ],
+  "description": "Deniz renk degisimi ve musilaj kirliligi",
+  "years": [
+    2015,
+    2020,
+    2022,
+    2025
+  ],
+  "tile_size": "512x512",
+  "created": "2026-07-28T14:10:16.828214",
+  "images": [
+    {
+      "year": 2015,
+      "rgb": "2015.png",
+      "ndvi": "2015_ndvi.png",
+      "size_bytes": 447079,
+      "ndwi": "2015_ndwi.png"
+    },
+    {
+      "year": 2020,
+      "rgb": "2020.png",
+      "ndvi": "2020_ndvi.png",
+      "size_bytes": 444367,
+      "ndwi": "2020_ndwi.png"
+    },
+    {
+      "year": 2022,
+      "rgb": "2022.png",
+      "ndvi": "2022_ndvi.png",
+      "size_bytes": 491283,
+      "ndwi": "2022_ndwi.png"
+    },
+    {
+      "year": 2025,
+      "rgb": "2025.png",
+      "ndvi": "2025_ndvi.png",
+      "size_bytes": 455998,
+      "ndwi": "2025_ndwi.png"
+    }
+  ]
+}

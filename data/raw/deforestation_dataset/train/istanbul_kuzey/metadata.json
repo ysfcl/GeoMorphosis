@@ -1,0 +1,44 @@
+{
+  "location": "istanbul_kuzey",
+  "dataset": "deforestation_dataset",
+  "split": "train",
+  "center": [
+    41.2215,
+    28.9248
+  ],
+  "description": "Kuzey ormanlari yapilanma ve agac kaybi",
+  "years": [
+    2015,
+    2020,
+    2022,
+    2025
+  ],
+  "tile_size": "512x512",
+  "created": "2026-07-28T14:01:33.260859",
+  "images": [
+    {
+      "year": 2015,
+      "rgb": "2015.png",
+      "ndvi": "2015_ndvi.png",
+      "size_bytes": 424943
+    },
+    {
+      "year": 2020,
+      "rgb": "2020.png",
+      "ndvi": "2020_ndvi.png",
+      "size_bytes": 382397
+    },
+    {
+      "year": 2022,
+      "rgb": "2022.png",
+      "ndvi": "2022_ndvi.png",
+      "size_bytes": 389895
+    },
+    {
+      "year": 2025,
+      "rgb": "2025.png",
+      "ndvi": "2025_ndvi.png",
+      "size_bytes": 371104
+    }
+  ]
+}

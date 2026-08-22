@@ -1,0 +1,44 @@
+{
+  "location": "canakkale_kazdaglari",
+  "dataset": "deforestation_dataset",
+  "split": "test",
+  "center": [
+    39.712,
+    26.825
+  ],
+  "description": "Kazdaglari orman ortusu degisimi",
+  "years": [
+    2015,
+    2020,
+    2022,
+    2025
+  ],
+  "tile_size": "512x512",
+  "created": "2026-07-28T14:04:27.119146",
+  "images": [
+    {
+      "year": 2015,
+      "rgb": "2015.png",
+      "ndvi": "2015_ndvi.png",
+      "size_bytes": 492645
+    },
+    {
+      "year": 2020,
+      "rgb": "2020.png",
+      "ndvi": "2020_ndvi.png",
+      "size_bytes": 485815
+    },
+    {
+      "year": 2022,
+      "rgb": "2022.png",
+      "ndvi": "2022_ndvi.png",
+      "size_bytes": 487540
+    },
+    {
+      "year": 2025,
+      "rgb": "2025.png",
+      "ndvi": "2025_ndvi.png",
+      "size_bytes": 478693
+    }
+  ]
+}

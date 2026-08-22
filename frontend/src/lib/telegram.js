@@ -103,7 +103,7 @@ export async function linkTelegramAccount(userId, chatId) {
   }
 }
 
-function formatAnalysisReport({ lat, lng, riskLevel, summary, timestamp }) {
+function formatAnalysisReport({ lat, lon, riskLevel, summary, timestamp }) {
   const riskMap = {
     normal: { emoji: '🟢', label: 'NORMAL' },
     dusuk: { emoji: '🟡', label: 'DÜŞÜK' },
@@ -119,7 +119,7 @@ function formatAnalysisReport({ lat, lng, riskLevel, summary, timestamp }) {
   return [
     '📊 <b>GEOMORPHOSIS SAHA ANALİZ RAPORU</b>',
     '━━━━━━━━━━━━━━━━━━━',
-    `📍 Konum: ${lat}, ${lng}`,
+    `📍 Konum: ${lat}, ${lon}`,
     `${risk.emoji} RİSK SEVİYESİ: ${risk.label}`,
     '',
     '📝 Özet Değerlendirme:',
@@ -150,7 +150,7 @@ export async function sendAnalysisReportToUser(userId, reportData) {
     }
 
     const text = formatAnalysisReport(reportData);
-    const panelUrl = `${process.env.NEXT_PUBLIC_APP_URL}/region?lat=${reportData.lat}&lon=${reportData.lng}`;
+    const panelUrl = `${process.env.NEXT_PUBLIC_APP_URL}/region?lat=${reportData.lat}&lon=${reportData.lon}`;
 
     const response = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
       method: 'POST',

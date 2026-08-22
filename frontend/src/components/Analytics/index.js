@@ -18,11 +18,14 @@ import RegionImagery from '@/components/RegionImagery';
 
 const ACCENT = {
   ndvi: '#2F6F52',
+  deforestation: '#D97706',
   pollution: '#3B82F6',
 };
 
 const RISK_LABELS = { yok: 'Yok', dusuk: 'Düşük', orta: 'Orta', yuksek: 'Yüksek' };
-const RISK_PERCENT = { yok: 4, dusuk: 28, orta: 58, yuksek: 90 };
+// "yok" gercekten %0 demek; 0'dan buyuk bir sabit vermek ustteki risk
+// kartıyla ("Yok") alttaki yuzdeler arasında tutarsızlık üretiyordu.
+const RISK_PERCENT = { yok: 0, dusuk: 28, orta: 58, yuksek: 90 };
 
 // NDVI'da bir noktanın diğer tüm noktaların ortalamasından bu kadar (mutlak)
 // sapması durumunda "anormal dalgalanma" olarak işaretliyoruz. 0-1 aralığında
@@ -152,17 +155,24 @@ export default function Analytics({ data }) {
   ];
 
   const currentPollution = normalizeRisk(data.pollution_level);
+  const currentDeforestation = normalizeRisk(data.deforestation_risk);
 
-  const ndviPercent = Math.round((data.ndvi_score ?? 0) * 100);
-  const pollutionPercent = RISK_PERCENT[currentPollution];
-  const total = ndviPercent + pollutionPercent || 1;
+  // --- Tespit dagilimi GERCEK backend verisinden uretilir ---
+  // Ormansızlaşma payı: change_detection.deforestation.loss_percentage
+  // (detected=false ise 0 sayılır). Kirlilik payı: risk seviyesi 'yok' iken
+  // 0'dır; boylece ustteki kartlarla alttaki yuzdeler asla celismez.
+  const changeDetection = data?.ai_results?.change_detection ?? {};
+  const deforestationInfo = changeDetection.deforestation ?? {};
+
+  const deforestationLossPercent = deforestationInfo.detected
+    ? Math.min(100, Math.max(0, Number(deforestationInfo.loss_percentage) || 0))
+    : 0;
+  const pollutionImpactPercent = RISK_PERCENT[currentPollution] ?? 0;
 
   const aiData = [
-    { ad: 'Bitki Örtüsü', deger: Math.round((ndviPercent / total) * 100) },
-    { ad: 'Kirlilik', deger: Math.round((pollutionPercent / total) * 100) },
-  ];
-
-  const PIE_COLORS = [ACCENT.ndvi, ACCENT.pollution];
+    { ad: 'Ormansızlaşma', deger: Math.round(deforestationLossPercent), fill: ACCENT.deforestation },
+    { ad: 'Kirlilik', deger: Math.round(pollutionImpactPercent), fill: ACCENT.pollution },
+  ].filter((item) => item.deger > 0);
 
   // Anormal dalgalanma tespiti: HER noktayı, kendi dışındaki noktaların
   // ortalamasıyla karşılaştırıyoruz. Sapma eşik değerini aşan her nokta
@@ -203,13 +213,23 @@ export default function Analytics({ data }) {
       </div>
 
       {/* KPI Kartları */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-3xl p-6 text-white shadow-xl">
           <p className="text-sm opacity-80">🍃 NDVI Skoru</p>
           <h2 className="text-5xl font-bold mt-3 tabular-nums">
             {data.ndvi_score ?? '0'}
           </h2>
           <p className="mt-4 text-sm opacity-80">Bitki örtüsü yoğunluğu</p>
+        </div>
+
+        <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-3xl p-6 text-white shadow-xl">
+          <p className="text-sm opacity-80">🌳 Ormansızlaşma</p>
+          <h2 className="text-4xl font-bold mt-3">
+            {RISK_LABELS[currentDeforestation]}
+          </h2>
+          <p className="mt-4 text-sm opacity-80 tabular-nums">
+            Bitki örtüsü kaybı: %{deforestationLossPercent}
+          </p>
         </div>
 
         <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-3xl p-6 text-white shadow-xl">
@@ -366,17 +386,34 @@ export default function Analytics({ data }) {
         )}
       </div>
 
-      {/* Kirlilik Göstergesi */}
-      <div className="bg-white border border-[#E2E4E8] rounded-lg p-6">
-        <div className="flex items-center justify-between mb-5">
-          <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280]">
-            Kirlilik Seviyesi
+      {/* Risk Göstergeleri */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="bg-white border border-[#E2E4E8] rounded-lg p-6">
+          <div className="flex items-center justify-between mb-5">
+            <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280]">
+              Ormansızlaşma Seviyesi
+            </p>
+            <span className="text-sm font-medium" style={{ color: ACCENT.deforestation }}>
+              {RISK_LABELS[currentDeforestation]}
+            </span>
+          </div>
+          <RiskBar percent={RISK_PERCENT[currentDeforestation]} accent={ACCENT.deforestation} />
+          <p className="text-xs text-[#9CA3AF] mt-3 tabular-nums">
+            Tespit edilen bitki örtüsü kaybı: %{deforestationLossPercent}
           </p>
-          <span className="text-sm font-medium" style={{ color: ACCENT.pollution }}>
-            {RISK_LABELS[currentPollution]}
-          </span>
         </div>
-        <RiskBar percent={RISK_PERCENT[currentPollution]} accent={ACCENT.pollution} />
+
+        <div className="bg-white border border-[#E2E4E8] rounded-lg p-6">
+          <div className="flex items-center justify-between mb-5">
+            <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280]">
+              Kirlilik Seviyesi
+            </p>
+            <span className="text-sm font-medium" style={{ color: ACCENT.pollution }}>
+              {RISK_LABELS[currentPollution]}
+            </span>
+          </div>
+          <RiskBar percent={RISK_PERCENT[currentPollution]} accent={ACCENT.pollution} />
+        </div>
       </div>
 
       {/* Yapay Zekâ Dağılımı */}
@@ -387,64 +424,78 @@ export default function Analytics({ data }) {
           </h3>
         </div>
 
-        <p className="text-[15px] text-[#374151] leading-relaxed mb-8 max-w-xl">
-          Bu bölgede yapılan analizde, tespit edilen etkenlerin{' '}
-          <span className="font-semibold text-[#1C2128]">%{aiData[0].deger}&apos;i bitki örtüsü</span>{' '}
-          ve <span className="font-semibold text-[#1C2128]">%{aiData[1].deger}&apos;i kirlilik</span>{' '}
-          kaynaklı unsurlara işaret ediyor.
-        </p>
-
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-center">
-          {/* Sol: lejant grid */}
-          <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+        {aiData.length === 0 ? (
+          <p className="text-[15px] text-[#374151] leading-relaxed mb-8 max-w-xl">
+            Bu analizde belirgin bir <span className="font-semibold text-[#1C2128]">ormansızlaşma kaybı</span> veya{' '}
+            <span className="font-semibold text-[#1C2128]">kirlilik etkisi</span> tespit edilmedi.
+          </p>
+        ) : (
+          <p className="text-[15px] text-[#374151] leading-relaxed mb-8 max-w-xl">
+            Bu bölgede yapılan analizde{' '}
             {aiData.map((item, index) => (
-              <div key={item.ad}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: PIE_COLORS[index] }}
-                  />
-                  <span className="text-[13px] text-[#4B5563]">{item.ad}</span>
-                </div>
-                <p
-                  className="font-data text-2xl font-bold tabular-nums"
-                  style={{ color: PIE_COLORS[index] }}
-                >
-                  %{item.deger}
-                </p>
-              </div>
-            ))}
-          </div>
+              <span key={item.ad}>
+                {index > 0 && ' ve '}
+                <span className="font-semibold text-[#1C2128]">%{item.deger}&apos;ü {item.ad.toLowerCase()}</span>
+              </span>
+            ))}{' '}
+            düzeyinde etki tespit edildi.
+          </p>
+        )}
 
-          {/* Sağ: etiketsiz donut */}
-          <div className="w-[220px] h-[220px] mx-auto lg:mx-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={aiData}
-                  dataKey="deger"
-                  nameKey="ad"
-                  innerRadius={62}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  stroke="#FFFFFF"
-                  strokeWidth={2}
-                  animationDuration={700}
-                >
-                  {aiData.map((entry, index) => (
-                    <Cell key={index} fill={PIE_COLORS[index]} />
-                  ))}
-                </Pie>
-                <Tooltip content={<DistributionTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+        {aiData.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-center">
+            {/* Sol: lejant grid */}
+            <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+              {aiData.map((item) => (
+                <div key={item.ad}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: item.fill }}
+                    />
+                    <span className="text-[13px] text-[#4B5563]">{item.ad}</span>
+                  </div>
+                  <p
+                    className="font-data text-2xl font-bold tabular-nums"
+                    style={{ color: item.fill }}
+                  >
+                    %{item.deger}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Sağ: etiketsiz donut */}
+            <div className="w-[220px] h-[220px] mx-auto lg:mx-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={aiData}
+                    dataKey="deger"
+                    nameKey="ad"
+                    innerRadius={62}
+                    outerRadius={100}
+                    paddingAngle={2}
+                    stroke="#FFFFFF"
+                    strokeWidth={2}
+                    animationDuration={700}
+                  >
+                    {aiData.map((entry) => (
+                      <Cell key={entry.ad} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<DistributionTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
+        )}
 
         <p className="text-[11px] text-[#9CA3AF] mt-8 pt-4 border-t border-[#F0F1F3]">
           Analiz tarihi:{' '}
           {data.timestamp ? new Date(data.timestamp).toLocaleString('tr-TR') : '—'} · Bu
-          oranlar NDVI ve kirlilik risk modeline dayanmaktadır.
+          oranlar NDVI değişim analizi (bitki örtüsü kaybı) ve kirlilik risk modeline
+          dayanmaktadır.
         </p>
       </div>
     </div>

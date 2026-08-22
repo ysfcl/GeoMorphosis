@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import mockHeatmapData from './mockHeatmapData';
+import { MAX_SELECTION_AREA_M2, MAX_SELECTION_AREA_KM2 } from '@/lib/mapLimits';
 
-// Maksimum seçilebilir alan sınırı (m² cinsinden)
-// Örnek: 25 km² = 25,000,000 m²
-const MAX_AREA_SQ_METERS = 25 * 1000 * 1000;
+const MAX_AREA_SQ_METERS = MAX_SELECTION_AREA_M2;
 
 export default function Map({ onRegionSelect, isDarkMode }) {
   const mapRef = useRef(null);
@@ -212,14 +211,14 @@ export default function Map({ onRegionSelect, isDarkMode }) {
       const pollutionHeatData =
         mockHeatmapData.map((p) => [
           p.lat,
-          p.lng,
+          p.lon,
           p.intensity
         ]);
 
       const vegetationHeatData =
         mockHeatmapData.map((p) => [
           p.lat,
-          p.lng,
+          p.lon,
           p.intensity
         ]);
 
@@ -398,9 +397,14 @@ export default function Map({ onRegionSelect, isDarkMode }) {
 
             lat: center.lat,
 
-            lng: center.lng,
+            lon: center.lng,
 
             radius: 1000,
+
+            // Cizilen poligonun jeodezik alani (m2) ve izinli ust sinir;
+            // ana sayfa paneli "Secilen Alan" satirini buradan gosterir.
+            area_sq_meters: Math.round(drawnArea),
+            max_area_sq_meters: MAX_AREA_SQ_METERS,
           });
         }
       );

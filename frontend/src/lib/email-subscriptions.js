@@ -1,61 +1,70 @@
-import Database from 'better-sqlite3';
+// Bildirim kanali kayitlari Prisma uzerinden yonetilir (notification_channels).
+// Eski better-sqlite3 erisimi kaldirildi: ayni DATABASE_URL'i paylasan tek
+// veri katmani birakildi; "directory does not exist" hatalarinin kaynagi buydu.
+//
+// Dogrulama akisi (Faz 3):
+//   saveEmailSubscription  -> 6 haneli kod uretir, verified_at temizlenir
+//   verifyEmailSubscription-> kod eslesirse verified_at yazilir
+//   getActiveEmailSubscription -> yalnizca dogrulanmis + aktif kanal doner
 
-const CREATE_EMAIL_SUBSCRIPTIONS_TABLE = `
-  CREATE TABLE IF NOT EXISTS email_subscriptions (
-    user_id TEXT PRIMARY KEY,
-    email TEXT NOT NULL,
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )
-`;
-
-function getDatabasePath() {
-  const databaseUrl = process.env.DATABASE_URL || 'file:./data/geopulse.db';
-
-  if (!databaseUrl.startsWith('file:')) {
-    throw new Error('E-posta abonelikleri için SQLite DATABASE_URL kullanılmalıdır.');
-  }
-
-  return databaseUrl.slice('file:'.length);
+async function getPrisma() {
+  const mod = await import('@/lib/prisma');
+  return mod.default;
 }
 
-function withDatabase(callback) {
-  const database = new Database(getDatabasePath());
-
-  try {
-    database.exec(CREATE_EMAIL_SUBSCRIPTIONS_TABLE);
-    return callback(database);
-  } finally {
-    database.close();
-  }
+function generateVerificationCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-export function saveEmailSubscription(userId, email) {
-  return withDatabase((database) => {
-    database.prepare(`
-      INSERT INTO email_subscriptions (user_id, email, is_active, updated_at)
-      VALUES (?, ?, 1, CURRENT_TIMESTAMP)
-      ON CONFLICT(user_id) DO UPDATE SET
-        email = excluded.email,
-        is_active = 1,
-        updated_at = CURRENT_TIMESTAMP
-    `).run(userId, email.trim().toLowerCase());
+export async function saveEmailSubscription(userId, email) {
+  const prisma = await getPrisma();
+  const destination = String(email).trim().toLowerCase();
+  const verificationCode = generateVerificationCode();
 
-    return database.prepare(`
-      SELECT user_id, email, is_active
-      FROM email_subscriptions
-      WHERE user_id = ?
-    `).get(userId);
+  return prisma.notification_channels.upsert({
+    where: { user_id_channel: { user_id: userId, channel: 'email' } },
+    update: {
+      destination,
+      is_active: true,
+      verification_code: verificationCode,
+      verified_at: null,
+    },
+    create: {
+      user_id: userId,
+      channel: 'email',
+      destination,
+      verification_code: verificationCode,
+    },
   });
 }
 
-export function getActiveEmailSubscription(userId) {
+/** Kod eslesirse kanali dogrular, aksi halde null doner. */
+export async function verifyEmailSubscription(userId, code) {
+  const prisma = await getPrisma();
+  const channel = await prisma.notification_channels.findUnique({
+    where: { user_id_channel: { user_id: userId, channel: 'email' } },
+  });
+
+  if (!channel || !channel.verification_code) return null;
+  if (String(code).trim() !== channel.verification_code) return null;
+
+  return prisma.notification_channels.update({
+    where: { id: channel.id },
+    data: { verified_at: new Date(), verification_code: null },
+  });
+}
+
+/** Rapor gonderiminde kullanilir; yalnizca dogrulanmis aboneler gecerli sayilir. */
+export async function getActiveEmailSubscription(userId) {
   if (!userId) return null;
 
-  return withDatabase((database) => database.prepare(`
-    SELECT user_id, email
-    FROM email_subscriptions
-    WHERE user_id = ? AND is_active = 1
-  `).get(userId));
+  const prisma = await getPrisma();
+  return prisma.notification_channels.findFirst({
+    where: {
+      user_id: userId,
+      channel: 'email',
+      is_active: true,
+      verified_at: { not: null },
+    },
+  });
 }

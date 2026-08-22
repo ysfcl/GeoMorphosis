@@ -4,6 +4,8 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import Analytics from '@/components/Analytics';
+import Report from '@/components/Report';
+import { Mail, Send } from 'lucide-react';
 import { getUserId } from '@/lib/userId';
 
 function RegionContent() {
@@ -20,6 +22,16 @@ function RegionContent() {
   const [activeTab, setActiveTab] = useState('map');
   const [analysisStatus, setAnalysisStatus] = useState('loading'); // 'loading' | 'processing' | 'success' | 'error'
   const [errorMessage, setErrorMessage] = useState(null);
+
+  // --- Bildirim kanallari (Faz 2-3) ---
+  // mail akisi: form -> kod dogrulama -> tamamlandi
+  const [mailFormOpen, setMailFormOpen] = useState(false);
+  const [notifStage, setNotifStage] = useState('idle'); // idle | code | verified
+  const [notifEmail, setNotifEmail] = useState('');
+  const [notifCode, setNotifCode] = useState('');
+  const [notifDevCode, setNotifDevCode] = useState(null);
+  const [notifMessage, setNotifMessage] = useState('');
+  const [notifBusy, setNotifBusy] = useState(false);
 
   const lat = parseFloat(searchParams.get('lat')) || 0;
   const lon = parseFloat(searchParams.get('lon')) || 0;
@@ -47,7 +59,7 @@ function RegionContent() {
 
       pollRef.current = setInterval(async () => {
         try {
-          const statusRes = await fetch(`/api/analyze?task_id=${taskId}&user_id=${getUserId()}&lat=${lat}&lng=${lon}`);
+          const statusRes = await fetch(`/api/analyze?task_id=${taskId}&user_id=${getUserId()}&lat=${lat}&lon=${lon}`);
           const statusData = await statusRes.json();
 
           if (cancelled) return;
@@ -126,6 +138,68 @@ function RegionContent() {
     };
   }, [lat, lon, existingTaskId]);
 
+  // --- BILDIRIM KANALI AKISI (Faz 2-3) ---
+  const handleSubscribeEmail = async () => {
+    setNotifBusy(true);
+    setNotifMessage('');
+    try {
+      const res = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: notifEmail, user_id: getUserId() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Kayıt başarısız oldu.');
+      }
+      setNotifDevCode(data.devCode || null);
+      setNotifStage('code');
+      setNotifMessage(data.message);
+    } catch (err) {
+      setNotifMessage(err.message);
+    } finally {
+      setNotifBusy(false);
+    }
+  };
+
+  const handleVerifyEmail = async () => {
+    setNotifBusy(true);
+    setNotifMessage('');
+    try {
+      const res = await fetch('/api/notify/email/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: getUserId(), code: notifCode }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Doğrulama başarısız oldu.');
+      }
+      setNotifStage('verified');
+      setNotifMessage(data.message);
+    } catch (err) {
+      setNotifMessage(err.message);
+    } finally {
+      setNotifBusy(false);
+    }
+  };
+
+  // Telegram eslestirmesi deep-link ile: kullanici bota ?start=<userId> ile
+  // baslar, webhook chat_id'yi regions_analysis tablosuna yazar.
+  const handleConnectTelegram = () => {
+    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
+    if (!botUsername || botUsername.includes('your_bot')) return;
+    window.open(
+      `https://t.me/${botUsername}?start=${getUserId()}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
+  };
+
+  const telegramConfigured =
+    process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME &&
+    !process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME.includes('your_bot');
+
 
   // --- HARİTA VE OVERLAP DÜZELTMESİ ---
   const initMap = useCallback(async () => {
@@ -196,7 +270,7 @@ function RegionContent() {
       // (Eğer backend 'generated_path' veya benzeri bir dizi döndürüyorsa)
       if (regionData.generated_path) {
         regionData.generated_path.forEach(point => {
-           L.circleMarker([point.lat, point.lng], {
+           L.circleMarker([point.lat, point.lon ?? point.lng], {
              color: 'red',
              radius: 5
            }).addTo(aiLayerGroupRef.current);
@@ -300,7 +374,117 @@ function RegionContent() {
               </p>
             )}
             {analysisStatus === 'success' && regionData && (
-              <Analytics data={regionData} />
+              <>
+                <Analytics data={regionData} />
+                <div className="mt-6">
+                  <Report data={regionData} />
+                </div>
+
+                {/* Bildirim kanallari (Faz 2-3): e-posta dogrulamali abonelik,
+                    Telegram bot eslestirmesi. */}
+                <div className="mt-6 border border-gray-200 rounded-lg p-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="font-semibold">Bildirim Kanalları</h3>
+                    {notifStage === 'verified' && (
+                      <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                        E-posta doğrulandı
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Analiz tamamlandığında sonucu e-posta veya Telegram ile alın.
+                  </p>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setMailFormOpen((open) => !open)}
+                      disabled={notifStage === 'verified'}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Mail size={16} />
+                      {mailFormOpen ? 'E-posta Formunu Kapat' : 'E-posta ile Gönder'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConnectTelegram}
+                      title={
+                        telegramConfigured
+                          ? 'Telegram botu ile hesabınızı eşleştirin'
+                          : '.env dosyasına NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ekleyin'
+                      }
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!telegramConfigured}
+                    >
+                      <Send size={16} />
+                      Telegram ile Gönder
+                    </button>
+                  </div>
+
+                  {mailFormOpen && notifStage !== 'verified' && (
+                    <div className="mt-4 border border-gray-200 rounded-md p-4 bg-gray-50 space-y-3">
+                      {notifStage === 'idle' && (
+                        <>
+                          <label className="block text-xs font-medium text-gray-600" htmlFor="notif-email">
+                            Raporların gönderileceği e-posta adresi
+                          </label>
+                          <input
+                            id="notif-email"
+                            type="email"
+                            value={notifEmail}
+                            onChange={(e) => setNotifEmail(e.target.value)}
+                            placeholder="ornek@eposta.com"
+                            className="w-full max-w-sm px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSubscribeEmail}
+                            disabled={notifBusy || !notifEmail}
+                            className="block px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                          >
+                            {notifBusy ? 'Kaydediliyor...' : 'Doğrulama Kodu Gönder'}
+                          </button>
+                        </>
+                      )}
+
+                      {notifStage === 'code' && (
+                        <>
+                          <p className="text-xs text-gray-600">
+                            <strong>{notifEmail}</strong> adresine gönderilen 6 haneli kodu girin.
+                          </p>
+                          {notifDevCode && (
+                            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 w-fit">
+                              SMTP yapılandırılmadığı için kod burada gösteriliyor:{' '}
+                              <strong>{notifDevCode}</strong>
+                            </p>
+                          )}
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={6}
+                            value={notifCode}
+                            onChange={(e) => setNotifCode(e.target.value.replace(/\D/g, ''))}
+                            placeholder="______"
+                            className="w-32 px-3 py-2 border border-gray-300 rounded-md text-sm tracking-[0.3em] text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleVerifyEmail}
+                            disabled={notifBusy || notifCode.length !== 6}
+                            className="block px-4 py-2 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+                          >
+                            {notifBusy ? 'Doğrulanıyor...' : 'Kodu Doğrula'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {notifMessage && (
+                    <p className="text-xs text-gray-500 mt-3">{notifMessage}</p>
+                  )}
+                </div>
+              </>
             )}
           </div>
         )}

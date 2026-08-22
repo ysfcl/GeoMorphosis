@@ -29,3 +29,20 @@ model regions_analysis {
   ai_results             String?
   periodic_subscriptions periodic_subscriptions[]
 }
+
+// Bildirim kanallari (Faz 1): e-posta aboneligi + dogrulama durumu.
+// Telegram eslestirmesi hala regions_analysis.telegram_chat_id uzerinden
+// yurutulur; bu tablo kanal bazli kayit/dogrulama icin tek adres.
+model notification_channels {
+  id                Int       @id @default(autoincrement())
+  user_id           String
+  channel           String // 'email' | 'telegram'
+  destination       String // e-posta adresi veya Telegram chat_id
+  is_active         Boolean   @default(true)
+  verification_code String?
+  verified_at       DateTime?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@unique([user_id, channel])
+}

@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.js",
     "lint": "next lint",
-    "test": "node --test --experimental-default-type=module --loader ./tests/next-loader.mjs tests/**/*.test.js"
+    "test": "node --test --loader ./tests/next-loader.mjs \"tests/**/*.test.js\""
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.9.1",
