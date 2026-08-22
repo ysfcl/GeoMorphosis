@@ -17,10 +17,17 @@ const nextConfig = {
     ],
   },
   async rewrites() {
+    // NEXT_PUBLIC_AI_ENGINE_URL tam bir URL olmalidir ("https://...").
+    // Eksik/gecersiz degerde rewrite hic eklenmez ki sunucu
+    // "Invalid rewrite found" ile crash etmesin (Railway'de basimiza geldi).
+    const aiEngineUrl = process.env.NEXT_PUBLIC_AI_ENGINE_URL;
+    if (!aiEngineUrl || !/^https?:\/\//.test(aiEngineUrl)) {
+      return [];
+    }
     return [
       {
         source: '/api/ai/:path*',
-        destination: `${process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000'}/:path*`,
+        destination: `${aiEngineUrl.replace(/\/+$/, '')}/:path*`,
       },
     ];
   },
