@@ -8,8 +8,14 @@ export const formatDate = (date) => {
   });
 };
 
+const normalizeRiskValue = (risk) => {
+  return typeof risk === 'string'
+    ? risk.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    : '';
+};
+
 export const getRiskColor = (risk) => {
-  switch (risk?.toLowerCase()) {
+  switch (normalizeRiskValue(risk)) {
     case 'yuksek':
     case 'high':
       return 'text-red-600 bg-red-50';

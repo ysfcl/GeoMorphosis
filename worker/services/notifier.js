@@ -11,18 +11,33 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-async function sendNotification(to, subject, text) {
+/**
+ * Uyarı e-postası gönderir.
+ * @returns {Promise<boolean>} gönderim başarılı ise true
+ */
+async function sendAlert(to, subject, text) {
+    if (!to) {
+        console.warn('E-posta alicisi belirtilmedi, bildirim atlanıyor.');
+        return false;
+    }
+
     try {
         const info = await transporter.sendMail({
-            from: '"Geomorphosis AI" <noreply@geomorphosis.com>',
-            to: to,
-            subject: subject,
-            text: text
+            from: process.env.SMTP_USER,
+            to,
+            subject,
+            text
         });
         console.log('E-posta başarıyla gönderildi, Mesaj ID: %s', info.messageId);
+        return true;
     } catch (error) {
         console.error('E-posta gönderim hatası:', error);
+        return false;
     }
 }
 
-module.exports = { sendNotification };
+module.exports = {
+    sendAlert,
+    // Eski isim geriye dönük uyumluluk için korunuyor
+    sendNotification: sendAlert
+};

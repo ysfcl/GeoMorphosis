@@ -40,6 +40,7 @@ body {
   width: 100%;
   z-index: 0;
 }
+
 /* Leaflet Draw İkon Düzeltmesi */
 .leaflet-draw-toolbar a {
   background-image: url('https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/images/spritesheet.png') !important;
@@ -52,4 +53,10 @@ body {
 .leaflet-draw-actions a {
   background-color: #1f2937 !important; /* Tailwind gray-800 */
   color: #fff !important;
+}
+
+/* Görsellerin kaybolmaması için AÇIK SİYAH / LACİVERT Harita Teması */
+.custom-dark-tiles {
+  /* Parlaklık (brightness) artırıldı, tam siyah olmaması için invert biraz kısıldı */
+  filter: invert(0.95) hue-rotate(195deg) brightness(1.15) contrast(0.95) saturate(0.8) !important;
 }

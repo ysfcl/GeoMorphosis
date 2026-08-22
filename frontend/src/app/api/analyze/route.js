@@ -1,25 +1,27 @@
 import { NextResponse } from 'next/server';
-import { sendTelegramNotification } from '@/lib/telegram';
-import { buildMockAnalysis } from '@/lib/mockAnalysis';
+import { sendSystemTelegramNotification, sendAnalysisReportToUser } from '@/lib/telegram';
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    
-    // Artık 'coordinates' yerine 'start_points' ve 'end_points' bekliyoruz
-    const { start_points, end_points, buffer_meters } = body;
+
+    // DÜZELTME: Gelen body'den bbox verisini de çıkarıyoruz
+    const { start_points, end_points, buffer_meters, region_name, user_id: userId, bbox } = body;
 
     if (!start_points || start_points.length === 0) {
-      return NextResponse.json({ error: 'Başlangıç noktaları (start_points) gerekli' }, { status: 400 });
+      return NextResponse.json({ error: 'Başlangıç noktaları (start_points) veya geçerli alan koordinatları gerekli' }, { status: 400 });
     }
 
     const aiEngineUrl = process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000';
 
-    // Vezne (FastAPI) için yeni payload yapımız
+    // DÜZELTME: Vezne (FastAPI) için payload'a bbox'ı ekliyoruz
     const payload = {
       start_points,
       end_points: end_points || [],
       buffer_meters: buffer_meters || 1000,
+      region_name: region_name || null,
+      user_id: userId || null,
+      bbox: bbox || null, 
     };
 
     const controller = new AbortController();
@@ -27,7 +29,7 @@ export async function POST(request) {
     const timeout = setTimeout(() => controller.abort(), 5000);
 
     try {
-      // FastAPI'nin YENİ asenkron endpointine (Vezne) istek atıyoruz
+      // FastAPI'nin asenkron kuyruk endpointine (Vezne) istek atıyoruz
       const response = await fetch(`${aiEngineUrl}/api/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -35,14 +37,20 @@ export async function POST(request) {
         signal: controller.signal,
       });
       clearTimeout(timeout);
-      
+
+      if (!response.ok) {
+        throw new Error(`AI Engine analiz baslatma hatasi: ${response.status}`);
+      }
+
       const data = await response.json(); // Burada sadece { task_id, message } dönecek
 
       const firstPoint = start_points[0];
-      
+      // Frontend farklı isimlendirmelerle nokta gönderebiliyor
+      const lon = firstPoint.lng ?? firstPoint.lon ?? firstPoint.longitude;
+
       // Telegram'a analizin BAŞLADIĞINI (kuyruğa alındığını) bildiriyoruz
-      await sendTelegramNotification(
-        `📍 Koordinat: ${firstPoint.lat}, ${firstPoint.lng}\nYeni bir bölge analizi mutfak kuyruğuna (Redis) başarıyla eklendi.\n🎫 Fiş No: ${data.task_id}`,
+      await sendSystemTelegramNotification(
+        `📍 Koordinat: ${firstPoint.lat}, ${lon}\nYeni bir bölge analizi mutfak kuyruğuna (Redis) başarıyla eklendi.\n🎫 Fiş No: ${data.task_id}`,
         'GEO-PULSE Görev Kuyruğu'
       );
 
@@ -52,23 +60,12 @@ export async function POST(request) {
     } catch(error) {
       clearTimeout(timeout);
 
-      // --- DEMO FALLBACK: AI Engine'e ulaşılamazsa mock analiz başlat ---
-      const firstPoint = start_points[0];
-      console.warn(`AI Engine'e ulaşılamadı (${error.message}). Demo analiz döndürülüyor.`);
-
-      await sendTelegramNotification(
+      await sendSystemTelegramNotification(
         `Vezneye (FastAPI) bağlanırken hata oluştu: ${error.message}`,
         'Sistem Bağlantı Hatası'
       );
 
-      const mock = buildMockAnalysis({
-        taskId: `demo-${Date.now()}`,
-        lat: firstPoint.lat,
-        lon: firstPoint.lng,
-        regionName: firstPoint.region_name,
-      });
-
-      return NextResponse.json({ task_id: mock.task_id, message: mock.message, demo: true });
+      return NextResponse.json({ error: 'Vezneye ulaşılamadı' }, { status: 502 });
     }
   } catch (error) {
     return NextResponse.json({ error: 'İstek işlenirken hata oluştu' }, { status: 500 });
@@ -78,38 +75,42 @@ export async function POST(request) {
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const aiEngineUrl = process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000';
-  
-  // YENİ EKLENEN KISIM: task_id varsa Polling (Durum Sorgulama) işlemi yap
+
+  // task_id varsa Polling (Durum Sorgulama) işlemi yap
   const taskId = searchParams.get('task_id');
+  const userId = searchParams.get('user_id');
+  const reportLat = searchParams.get('lat');
+  const reportLng = searchParams.get('lng');
 
   if (taskId) {
-    try {
-      const response = await fetch(`${aiEngineUrl}/api/status/${taskId}`);
-      const statusData = await response.json();
+  try {
+    const response = await fetch(`${aiEngineUrl}/api/status/${taskId}`);
 
-      // Eğer mutfak analizi bitirdiyse Telegram'a müjdeyi ver
-      if (statusData.status === 'completed') {
-         await sendTelegramNotification(
-           `✅ Fiş No: ${taskId}\nHarita üzerinde bölge yapay zeka analizi başarıyla tamamlandı ve sonuçlar arayüze iletildi.`,
-           'GEO-PULSE Analiz Raporu'
-         );
-      }
-
-      // Frontend'e durumu ilet (pending, processing, completed veya failed)
-      return NextResponse.json(statusData);
-    } catch (error) {
-      console.warn(`AI Engine durum sorgusu başarısız (${error.message}). Demo analiz döndürülüyor.`);
-
-      // --- DEMO FALLBACK: task_id demo- ile başlıyorsa mock analiz tamamlandı olarak dön ---
-      const mock = buildMockAnalysis({
-        taskId,
-        lat: 40.18,
-        lon: 29.06,
-      });
-
-      return NextResponse.json(mock);
+    if (!response.ok) {
+      throw new Error(`AI Engine hata döndü: ${response.status}`);
     }
+
+    const statusData = await response.json();
+
+    if (statusData.status === 'completed') {
+       const report = {
+         lat: reportLat,
+         lng: reportLng,
+         riskLevel: statusData.result?.fire_risk || 'normal',
+         summary: statusData.result?.demo_mode
+           ? 'Uydu verisi alınamadığı için demo değerleri gösterildi.'
+           : 'Bölge analizi tamamlandı, detaylar panelde görüntülenebilir.',
+         timestamp: new Date().toISOString(),
+       };
+
+       await sendAnalysisReportToUser(userId, report);
+    }
+
+    return NextResponse.json(statusData);
+  } catch (error) {
+     return NextResponse.json({ error: 'Durum sorgulanamadı' }, { status: 500 });
   }
+}
 
   // --- ESKİ SİSTEM GİBİ SADECE LAT/LON GELDİYSE (Geriye Dönük Uyumluluk İçin Korundu) ---
   const lat = searchParams.get('lat');
@@ -128,16 +129,21 @@ export async function GET(request) {
       { signal: controller.signal }
     );
     clearTimeout(timeout);
+
+    if (!response.ok) {
+      throw new Error(`Uydu servisi hata döndü: ${response.status}`);
+    }
+
     const satelliteData = await response.json();
 
-    await sendTelegramNotification(
+    await sendSystemTelegramNotification(
       `👀 Koordinat: ${lat}, ${lon}\nBölge harita üzerinde görüntülendi.`,
       'Harita Görüntüleme Raporu'
     );
 
     return NextResponse.json({ status: 'completed', satellite: satelliteData });
   } catch (error) {
-    await sendTelegramNotification(
+    await sendSystemTelegramNotification(
       `Uydu servisi cevap vermediği için analiz sırasında bir hata oluştu: ${error.message}`,
       'Analiz Hatası'
     );

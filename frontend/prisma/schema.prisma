@@ -1,6 +1,5 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -11,6 +10,7 @@ model periodic_subscriptions {
   id                  Int               @id @default(autoincrement())
   region_id           Int?
   notification_target String?
+  unsubscribe_token   String?           @unique
   interval_minutes    Int?              @default(120)
   last_checked_at     DateTime?         @default(now())
   is_active           Boolean?          @default(true)
@@ -20,6 +20,8 @@ model periodic_subscriptions {
 model regions_analysis {
   id                     Int                      @id @default(autoincrement())
   ip_address             String?
+  user_id                String?                  @unique            
+  telegram_chat_id       String?                  
   image_no               String?
   timestamp              DateTime?                @default(now())
   region_name            String?

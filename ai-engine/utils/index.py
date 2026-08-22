@@ -2,7 +2,11 @@ import sqlite3
 import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
+
+# Docker'da ai-engine /app altinda calisir ve ./data:/app/data mount'u
+# frontend ile ayni veritabanini gosterir. Docker disinda calisirken
+# ortak dosyayi gostermek icin GEOMORPHOSIS_DATA_DIR kullanilabilir.
+DATA_DIR = os.environ.get("GEOMORPHOSIS_DATA_DIR") or os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "geopulse.db")
 
 
@@ -43,6 +47,18 @@ def init_db():
             last_checked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             is_active BOOLEAN DEFAULT 1,
             FOREIGN KEY (region_id) REFERENCES regions_analysis(id) ON DELETE CASCADE
+        );
+        """)
+
+        # Arayüzde e-posta bildirimlerini etkinleştiren kullanıcıların kalıcı kaydı.
+        # user_id, tarayıcıdaki GeoMorphosis kullanıcı kimliğidir.
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS email_subscriptions (
+            user_id TEXT PRIMARY KEY,
+            email VARCHAR(255) NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """)
 

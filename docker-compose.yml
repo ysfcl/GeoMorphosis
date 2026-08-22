@@ -10,10 +10,15 @@ services:
       - GOOGLE_EARTH_ENGINE_CREDENTIALS=/app/geomorphosis-cb3ae273c071.json
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Egitilmis agirlik: models/fire_yolov8_v2.pt -> fire_yolov8.pt -> yolov8n.pt
+      # sirasiyla aranir. MODEL_PATH ile ozel bir yol verilebilir.
+      - MODEL_PATH=${MODEL_PATH:-}
     volumes:
       - ./ai-engine:/app
       - ./data:/app/data
       - /app/venv
+    depends_on:
+      - redis
     restart: unless-stopped
 
   web-client:
@@ -30,6 +35,17 @@ services:
       - NEXT_PUBLIC_AI_ENGINE_URL=http://ai-engine:8000
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
+      - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+      # ai-engine ile ayni SQLite dosyasi (./data:/app/data mount'u)
+      - DATABASE_URL=file:./data/geopulse.db
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - EMAIL_FROM=${SMTP_USER}
+      - NOTIFICATION_INTERNAL_SECRET=${NOTIFICATION_INTERNAL_SECRET}
     depends_on:
       - ai-engine
 
@@ -46,7 +62,13 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - AI_ENGINE_URL=http://host.docker.internal:8000
+      - AI_ENGINE_URL=http://ai-engine:8000
+      - FRONTEND_URL=http://web-client:3000
+      - NOTIFICATION_INTERNAL_SECRET=${NOTIFICATION_INTERNAL_SECRET}
+      # Erken uyari e-postasinin gidecegi adres (bos ise SMTP_USER kullanilir)
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+      # Uydu indirme + YOLO icin ust sinir (ms)
+      - ANALYSIS_TIMEOUT_MS=${ANALYSIS_TIMEOUT_MS:-180000}
     depends_on:
       - ai-engine
       - redis

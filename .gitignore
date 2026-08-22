@@ -53,8 +53,20 @@ data/cache/*
 ai-engine/data/*.log
 
 # models
-ai-engine/models/*.pt
+# Egitilmis agirliklar (ai-engine/models/*.pt) bilerek repoda tutuluyor;
+# ekibin modeli calistirabilmesi icin gerekli.
+ai-engine/Mehmet-yolo/
 
+# Ultralytics'in otomatik indirdigi pretrained agirliklar - repoda tutulmamali,
+# gerektiginde kendiliginden iniyorlar.
+/yolo*.pt
+
+# Egitim ciktilarindaki agirliklar (grafik/csv kayitlari kalsin, .pt'ler girmesin)
+runs/**/weights/
+ai-engine/runs/
+
+# Lokal calistirma loglari
+logs/
 # database
 *.db
 *.sqlite
@@ -71,3 +83,24 @@ ai-engine/models/*.pt
 # Google Cloud credentials
 ai-engine/*.json
 !ai-engine/package.json
+
+# Proje genelindeki tüm data ve dataset klasörleri
+data/
+dataset/
+**/data/
+**/dataset/
+
+# Veritabanı ve büyük dosyalar
+*.db
+
+# Hassas API anahtarı
+gee-key.json
+
+# Terminal kazalari sonucu olusan dosyalar.
+# Ornegin `git s` + `how ... > main-telegram.txt` ya da komut metninin dosya
+# adina donusmesi (`git commit -m ...` adinda bir dosya) main'e commit'lenmisti.
+git commit*
+git show*
+git diff*
+main-telegram.txt
+local-package-backup/

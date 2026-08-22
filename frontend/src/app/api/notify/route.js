@@ -3,7 +3,7 @@ import { sendTelegramNotification } from '@/lib/telegram';
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { message, title } = body;
+    const {chatId, message, title } = body;
 
     if (!message) {
       return Response.json(
@@ -12,7 +12,16 @@ export async function POST(request) {
       );
     }
 
+    if (!chatId) {
+      return Response.json(
+        { success: false, error: 'Alıcı (chatId) zorunludur.' },
+        { status: 400 }
+      );
+    }
+
+
     const isSent = await sendTelegramNotification(
+      chatId,
       message,
       title || 'Sistem Bildirimi'
     );
@@ -42,7 +51,10 @@ export async function POST(request) {
 
 // Tarayıcıdan test edebilmek için geçici bir GET metodu da eklenir
 export async function GET() {
+  const testChatId = process.env.TELEGRAM_CHAT_ID; // kendi chat ID'n
+
   const isSent = await sendTelegramNotification(
+    testChatId,
     'Notify endpoint\'i başarıyla oluşturuldu ve çalışıyor! Bu, bir test mesajıdır.',
     'Sistem Testi'
   );

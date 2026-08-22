@@ -1,0 +1,34 @@
+# --- Kimlik dosyalari ---
+# Imaja ASLA girmemeli. docker-compose bunlari volume ile veriyor
+# (GOOGLE_EARTH_ENGINE_CREDENTIALS). Calisma zamaninda kodda diskten
+# okunan baska bir .json yok.
+*.json
+**/*.json
+gee-key.json
+
+# --- Python onbellegi / sanal ortam ---
+__pycache__/
+**/__pycache__/
+*.py[cod]
+venv/
+.venv/
+.pytest_cache/
+
+# --- Egitim ve gelistirme dosyalari ---
+# Calisma zamaninda kullanilmiyor; sadece model egitmek icin gerekliler.
+train.py
+tests/
+utils/data_collector.py
+utils/prepare_yolo_dataset.py
+utils/auto_labeler.py
+runs/
+dataset/
+Mehmet-yolo/
+
+# --- Veri ve onbellek ---
+# docker-compose ./data:/app/data mount'u ile sagliyor.
+data/
+
+# --- Diger ---
+Dockerfile
+.dockerignore

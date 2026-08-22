@@ -4,64 +4,113 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import Analytics from '@/components/Analytics';
+import { getUserId } from '@/lib/userId';
 
 function RegionContent() {
   const searchParams = useSearchParams();
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const aiLayerGroupRef = useRef(null); // Çakışmaları önlemek için yeni katman referansı
+  // Aynı bölge için ikinci kez iş emri vermemek üzere son istenen anahtar.
+  // React StrictMode geliştirme modunda effect'i iki kez çalıştırıyor ve her
+  // çalıştırma bir uydu indirme + YOLO turu maliyetinde.
+  const requestedKeyRef = useRef(null);
 
   const [regionData, setRegionData] = useState(null);
   const [activeTab, setActiveTab] = useState('map');
   const [analysisStatus, setAnalysisStatus] = useState('loading'); // 'loading' | 'processing' | 'success' | 'error'
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const lat = parseFloat(searchParams.get('lat')) || 0;
   const lon = parseFloat(searchParams.get('lon')) || 0;
+  // Ana sayfa analizi zaten başlattıysa fişi bize taşır; aynı bölgeyi
+  // (uydu indirme + YOLO) ikinci kez analiz etmemek için bunu kullanıyoruz.
+  const existingTaskId = searchParams.get('task_id');
 
   // --- VEZNE-MUTFAK (POLLING) MANTIĞI BURADA ---
   useEffect(() => {
     if (!lat || !lon) return;
 
-    let pollInterval;
+    const pollRef = { current: null };
+    let cancelled = false;
+
+    const stopPolling = () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+
+    // Mutfaktan (Redis) yemeğin durumunu kontrol et (Polling)
+    const startPolling = (taskId) => {
+      setAnalysisStatus('processing');
+
+      pollRef.current = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`/api/analyze?task_id=${taskId}&user_id=${getUserId()}&lat=${lat}&lng=${lon}`);
+          const statusData = await statusRes.json();
+
+          if (cancelled) return;
+
+          if (statusData.status === 'completed') {
+            stopPolling(); // İş bitti, sormayı bırak
+            setRegionData(statusData.result); // Analytics.js'i besleyecek veriyi state'e yaz
+            setAnalysisStatus('success');
+          } else if (statusData.status === 'failed') {
+            stopPolling();
+            setErrorMessage(statusData.error || null);
+            setAnalysisStatus('error');
+          }
+        } catch (err) {
+          console.error('Durum sorgulanamadı:', err);
+          stopPolling();
+          setAnalysisStatus('error');
+        }
+      }, 3000); // Her 3 saniyede bir kontrol et
+    };
+
+    // Vezneye (FastAPI) iş emrini ver (POST)
+    // Backend'in beklediği start_points listesine haritadaki lat/lon'u gönderiyoruz
+    const requestAnalysis = async () => {
+      const postRes = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          start_points: [{ lat, lon }],
+          end_points: [], // Eğer bitiş noktası yoksa boş liste
+          buffer_meters: 1000
+        })
+      });
+
+      const postData = await postRes.json();
+      return postData.task_id;
+    };
 
     const fetchRegion = async () => {
       try {
         setAnalysisStatus('loading');
-        
-        // 1. Vezneye (FastAPI) iş emrini ver (POST)
-        // Backend'in beklediği start_points listesine haritadaki lat/lon'u gönderiyoruz
-        const postRes = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            start_points: [{ lat, lon }],
-            end_points: [], // Eğer bitiş noktası yoksa boş liste
-            buffer_meters: 1000
-          })
-        });
 
-        const postData = await postRes.json();
-        const taskId = postData.task_id;
+        // Hazır bir fiş varsa yeni iş emri verme, doğrudan sorgulamaya geç
+        if (existingTaskId) {
+          startPolling(existingTaskId);
+          return;
+        }
+
+        // Aynı bölge için tek bir iş emri. StrictMode effect'i iki kez
+        // çalıştırdığında ikinci çağrı yeni POST atmak yerine ilkinin
+        // promise'ini bekleyip aynı fişle sorgulamaya başlıyor.
+        const requestKey = `${lat},${lon}`;
+
+        if (requestedKeyRef.current?.key !== requestKey) {
+          requestedKeyRef.current = { key: requestKey, promise: requestAnalysis() };
+        }
+
+        const taskId = await requestedKeyRef.current.promise;
 
         if (!taskId) throw new Error('Task ID alınamadı');
+        if (cancelled) return;
 
-        setAnalysisStatus('processing');
-
-        // 2. Mutfaktan (Redis) yemeğin durumunu kontrol et (Polling)
-        pollInterval = setInterval(async () => {
-          const statusRes = await fetch(`/api/analyze/?task_id=${taskId}`);
-          const statusData = await statusRes.json();
-
-          if (statusData.status === 'completed') {
-            clearInterval(pollInterval); // İş bitti, sormayı bırak
-            setRegionData(statusData.result); // Analytics.js'i besleyecek veriyi state'e yaz
-            setAnalysisStatus('success');
-          } else if (statusData.status === 'failed') {
-            clearInterval(pollInterval);
-            setAnalysisStatus('error');
-          }
-        }, 3000); // Her 3 saniyede bir kontrol et
-
+        startPolling(taskId);
       } catch (err) {
         console.error('Veri yüklenemedi:', err);
         setAnalysisStatus('error');
@@ -72,9 +121,10 @@ function RegionContent() {
 
     // Component kapandığında interval'i temizle (Memory Leak önlemi)
     return () => {
-      if (pollInterval) clearInterval(pollInterval);
+      cancelled = true;
+      stopPolling();
     };
-  }, [lat, lon]);
+  }, [lat, lon, existingTaskId]);
 
 
   // --- HARİTA VE OVERLAP DÜZELTMESİ ---
@@ -237,13 +287,17 @@ function RegionContent() {
         {activeTab === 'analysis' && (
           <div className="card">
             {analysisStatus === 'loading' && (
-              <p className="text-gray-500">FastAPI'ye bağlanılıyor...</p>
+              <p className="text-gray-500">FastAPI&apos;ye bağlanılıyor...</p>
             )}
             {analysisStatus === 'processing' && (
               <p className="text-blue-500 font-semibold animate-pulse">Yapay zeka verileri işliyor, lütfen bekleyin...</p>
             )}
             {analysisStatus === 'error' && (
-              <p className="text-red-500">Analiz sırasında bir hata oluştu.</p>
+              <p className="text-red-500">
+                {errorMessage
+                  ? `Analiz sırasında bir hata oluştu: ${errorMessage}`
+                  : 'Analiz sırasında bir hata oluştu.'}
+              </p>
             )}
             {analysisStatus === 'success' && regionData && (
               <Analytics data={regionData} />
