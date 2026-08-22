@@ -23,14 +23,19 @@ const ACCENT = {
 };
 
 const RISK_LABELS = { yok: 'Yok', dusuk: 'Düşük', orta: 'Orta', yuksek: 'Yüksek' };
-// "yok" gercekten %0 demek; 0'dan buyuk bir sabit vermek ustteki risk
-// kartıyla ("Yok") alttaki yuzdeler arasında tutarsızlık üretiyordu.
-const RISK_PERCENT = { yok: 0, dusuk: 28, orta: 58, yuksek: 90 };
 
 // NDVI'da bir noktanın diğer tüm noktaların ortalamasından bu kadar (mutlak)
 // sapması durumunda "anormal dalgalanma" olarak işaretliyoruz. 0-1 aralığında
 // 0.15, gözle görülür bir bitki örtüsü kaybı/artışına denk gelir.
 const ANOMALY_THRESHOLD = 0.15;
+
+// ai-engine tarafindaki _risk_from_vegetation_loss ile ayni esleme.
+function deforestationRiskFrom(deforestation) {
+  if (!deforestation?.detected) return 'yok';
+  if (deforestation.severity === 'CRITICAL') return 'yuksek';
+  if (deforestation.severity === 'HIGH') return 'orta';
+  return 'dusuk';
+}
 
 function normalizeRisk(value) {
   if (!value) return 'yok';
@@ -155,19 +160,31 @@ export default function Analytics({ data }) {
   ];
 
   const currentPollution = normalizeRisk(data.pollution_level);
-  const currentDeforestation = normalizeRisk(data.deforestation_risk);
+  // data.deforestation_risk sozlesmede yok; severity change_detection altinda.
+  // Eskiden normalizeRisk(undefined) -> "yok" donuyordu ve kart %11.05 kayip
+  // gosterirken basligi "Yok" yaziyordu.
+  const currentDeforestation = deforestationRiskFrom(
+    data?.ai_results?.change_detection?.deforestation
+  );
 
   // --- Tespit dagilimi GERCEK backend verisinden uretilir ---
   // Ormansızlaşma payı: change_detection.deforestation.loss_percentage
-  // (detected=false ise 0 sayılır). Kirlilik payı: risk seviyesi 'yok' iken
-  // 0'dır; boylece ustteki kartlarla alttaki yuzdeler asla celismez.
+  // Kirlilik payı: ai_results.pollution.coverage_percentage - tespit kutularinin
+  // kapladigi alan orani. Ikisi de alan tabanli olcum, ayni anlamda.
+  // Onceden kirlilik icin RISK_PERCENT tablosu kullaniliyordu; o gercek bir
+  // olcum degil, kategoriden turetilmis sabit bir cubuk genisligiydi.
   const changeDetection = data?.ai_results?.change_detection ?? {};
   const deforestationInfo = changeDetection.deforestation ?? {};
+  const pollutionInfo = data?.ai_results?.pollution ?? {};
+
+  const clampPercent = (value) => Math.min(100, Math.max(0, Number(value) || 0));
 
   const deforestationLossPercent = deforestationInfo.detected
-    ? Math.min(100, Math.max(0, Number(deforestationInfo.loss_percentage) || 0))
+    ? clampPercent(deforestationInfo.loss_percentage)
     : 0;
-  const pollutionImpactPercent = RISK_PERCENT[currentPollution] ?? 0;
+  const pollutionImpactPercent = clampPercent(
+    data?.pollution_percentage ?? pollutionInfo.coverage_percentage
+  );
 
   const aiData = [
     { ad: 'Ormansızlaşma', deger: Math.round(deforestationLossPercent), fill: ACCENT.deforestation },
@@ -234,10 +251,12 @@ export default function Analytics({ data }) {
 
         <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-3xl p-6 text-white shadow-xl">
           <p className="text-sm opacity-80">🏭 Kirlilik</p>
-          <h2 className="text-4xl font-bold mt-3">
-            {RISK_LABELS[currentPollution]}
+          <h2 className="text-4xl font-bold mt-3 tabular-nums">
+            %{pollutionImpactPercent}
           </h2>
-          <p className="mt-4 text-sm opacity-80">Çevresel etki</p>
+          <p className="mt-4 text-sm opacity-80 tabular-nums">
+            Seviye: {RISK_LABELS[currentPollution]}
+          </p>
         </div>
 
         <div className="bg-gradient-to-r from-blue-500 to-cyan-600 rounded-3xl p-6 text-white shadow-xl">
@@ -397,7 +416,7 @@ export default function Analytics({ data }) {
               {RISK_LABELS[currentDeforestation]}
             </span>
           </div>
-          <RiskBar percent={RISK_PERCENT[currentDeforestation]} accent={ACCENT.deforestation} />
+          <RiskBar percent={deforestationLossPercent} accent={ACCENT.deforestation} />
           <p className="text-xs text-[#9CA3AF] mt-3 tabular-nums">
             Tespit edilen bitki örtüsü kaybı: %{deforestationLossPercent}
           </p>
@@ -412,7 +431,13 @@ export default function Analytics({ data }) {
               {RISK_LABELS[currentPollution]}
             </span>
           </div>
-          <RiskBar percent={RISK_PERCENT[currentPollution]} accent={ACCENT.pollution} />
+          <RiskBar percent={pollutionImpactPercent} accent={ACCENT.pollution} />
+          <p className="text-xs text-[#9CA3AF] mt-3 tabular-nums">
+            Tespit edilen kirlilik alanı: %{pollutionImpactPercent}
+            {pollutionInfo.detection_count
+              ? ` (${pollutionInfo.detection_count} tespit)`
+              : ''}
+          </p>
         </div>
       </div>
 

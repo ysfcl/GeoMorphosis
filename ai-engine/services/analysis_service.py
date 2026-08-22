@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from typing import Any
 
+import numpy as np
+
 from services.change_detection_service import ChangeDetectionService
 from services.change_map_service import render_ndvi_change_map
 from services.ndvi_service import NdviService
@@ -29,17 +31,53 @@ def _severity_for_lake_shrinkage(shrinkage_percentage: float) -> str:
     return "HIGH" if shrinkage_percentage > 5 else "NORMAL"
 
 
+def _detections_of(detections: list[dict[str, Any]], class_name: str) -> list[dict[str, Any]]:
+    return [d for d in detections if str(d.get("class", "")).lower() == class_name]
+
+
+def _detection_coverage_percentage(
+    detections: list[dict[str, Any]], class_name: str, size: int
+) -> float:
+    """Bir sinifa ait kutularin goruntunun yuzde kacini kapladigini olcer.
+
+    Kutu alanlarini toplamak yerine maske kullaniliyor: ust uste binen
+    tespitler tek sayiliyor, aksi halde yuzde %100'u asabiliyordu.
+
+    Olcum, bitki ortusu kaybi yuzdesiyle ayni anlamda olsun diye alan
+    tabanli: ChangeDetectionService.detect_vegetation_loss da
+    loss_pixel_count / total_pixels hesapliyor.
+    """
+    matches = _detections_of(detections, class_name)
+    if not matches or size <= 0:
+        return 0.0
+
+    mask = np.zeros((size, size), dtype=bool)
+
+    for detection in matches:
+        bbox = detection.get("bbox") or []
+        if len(bbox) < 4:
+            continue
+
+        x1, y1, x2, y2 = (float(v) for v in bbox[:4])
+        # Goruntu disina tasan kutular kirpiliyor
+        left = max(0, min(size, int(round(min(x1, x2)))))
+        right = max(0, min(size, int(round(max(x1, x2)))))
+        top = max(0, min(size, int(round(min(y1, y2)))))
+        bottom = max(0, min(size, int(round(max(y1, y2)))))
+
+        if right > left and bottom > top:
+            mask[top:bottom, left:right] = True
+
+    return round(float(mask.sum()) / mask.size * 100, 2)
+
+
 def _risk_from_detections(detections: list[dict[str, Any]], class_name: str) -> str:
     """YOLO tespitlerini frontend'in bekledigi risk seviyesine cevirir.
 
     Guven skoru seviyeyi belirler, ayni siniftan cok sayida tespit varsa
     seviye bir kademe yukseltilir.
     """
-    matches = [
-        d
-        for d in detections
-        if str(d.get("class", "")).lower() == class_name
-    ]
+    matches = _detections_of(detections, class_name)
 
     if not matches:
         return "yok"
@@ -175,6 +213,20 @@ def analyze_region(
         "severity": _severity_for_lake_shrinkage(water_res["shrinkage_percentage"]),
     }
 
+    # Kirlilik olcumu: ormansizlasmadaki loss_percentage ile ayni anlamda,
+    # alan tabanli. Panelde kirlilik karti da artik gercek bir yuzde gosteriyor.
+    image_size = int(THUMB_SIZE.split("x")[0])
+    pollution_matches = _detections_of(detections, "pollution")
+    pollution_coverage = _detection_coverage_percentage(detections, "pollution", image_size)
+    pollution = {
+        "detected": bool(pollution_matches),
+        "coverage_percentage": pollution_coverage,
+        "detection_count": len(pollution_matches),
+        "max_confidence": round(
+            max((float(d.get("confidence", 0.0)) for d in pollution_matches), default=0.0), 2
+        ),
+    }
+
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     ai_results_dict = {
@@ -190,6 +242,7 @@ def analyze_region(
             "deforestation": deforestation,
             "lake_shrinkage": lake_shrinkage,
         },
+        "pollution": pollution,
         "restricted_area": {
             "bbox": None,
             "center": {"lat": lat, "lon": lon},
@@ -213,6 +266,7 @@ def analyze_region(
         "ndvi_score": ndvi_t2_mean,
         "fire_risk": fire_risk,
         "pollution_level": pollution_level,
+        "pollution_percentage": pollution_coverage,
         # --- Durum bayraklari ---
         "demo_mode": demo_mode,
         "model_loaded": model_loaded,
