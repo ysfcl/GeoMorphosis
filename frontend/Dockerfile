@@ -10,7 +10,7 @@ RUN npm install
 
 COPY . .
 
-RUN npx prisma generate
+RUN npx prisma generate --schema=./frontend/prisma/schema.prisma
 
 EXPOSE 3000
 

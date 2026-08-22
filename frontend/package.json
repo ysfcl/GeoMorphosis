@@ -2,11 +2,6 @@
   "name": "geopulse-frontend",
   "version": "1.0.0",
   "packageManager": "npm@10.8.1",
-  "workspaces": [
-    "frontend",
-    "aiengine",
-    "worker"
-  ],
   "private": true,
   "scripts": {
     "dev": "next dev",

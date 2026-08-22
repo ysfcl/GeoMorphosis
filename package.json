@@ -3,20 +3,22 @@
   "version": "1.0.0",
   "packageManager": "npm@10.8.1",
   "workspaces": [
-    "frontend",
-    "aiengine",
-    "worker"
+    "geopulse-frontend",
+    "geomorphosis-worker"
   ],
   "private": true,
   "scripts": {
     "build": "cd frontend && npm ci && npm run build",
-    "start": "cd frontend && npm ci && npm run start"
+    "start": "cd frontend && npm ci && npm run build && npm run start"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.9.1",
     "@prisma/client": "^7.9.0",
     "better-sqlite3": "^13.0.3",
     "leaflet.heat": "^0.2.0"
+  },
+  "prisma": {
+  "schema": "frontend/prisma/schema.prisma"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
