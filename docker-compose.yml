@@ -10,8 +10,8 @@ services:
       - GOOGLE_EARTH_ENGINE_CREDENTIALS=/app/geomorphosis-cb3ae273c071.json
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      # Egitilmis agirlik: models/fire_yolov8_v2.pt -> fire_yolov8.pt -> yolov8n.pt
-      # sirasiyla aranir. MODEL_PATH ile ozel bir yol verilebilir.
+      # Egitilmis agirlik: models/deforestation_yolov8_v2.pt -> deforestation_yolov8.pt
+      # -> yolov8n.pt sirasiyla aranir. MODEL_PATH ile ozel bir yol verilebilir.
       - MODEL_PATH=${MODEL_PATH:-}
     volumes:
       - ./ai-engine:/app
@@ -25,6 +25,9 @@ services:
     build:
       context: ./frontend
     container_name: geomorphosis-frontend
+    # Dockerfile artik production build (npm run build + start) yapiyor;
+    # lokal gelistirmede kaynak kodu volume ile ezip dev server'da kalmaya devam ediyoruz.
+    command: npm run dev
     ports:
       - "3000:3000"
     volumes:

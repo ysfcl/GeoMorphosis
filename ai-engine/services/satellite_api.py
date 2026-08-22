@@ -69,13 +69,28 @@ def _init_earth_engine():
         return
 
     try:
+        import base64
+        import tempfile
+
         import ee
 
         credentials_path = os.environ.get("GOOGLE_EARTH_ENGINE_CREDENTIALS")
+        # Bulut ortamlarinda (Railway vb.) dosya mount edilemediginden
+        # servis hesabi anahtari base64 ile env olarak tasinir.
+        credentials_b64 = os.environ.get("GOOGLE_EARTH_ENGINE_CREDENTIALS_B64")
         project_id = os.environ.get("GOOGLE_EARTH_ENGINE_PROJECT", "geomorphosis")
 
         if credentials_path and os.path.exists(credentials_path):
             creds = ee.ServiceAccountCredentials(None, credentials_path)
+            ee.Initialize(creds, project=project_id)
+        elif credentials_b64:
+            key_data = base64.b64decode(credentials_b64)
+            with tempfile.NamedTemporaryFile(
+                mode="wb", suffix=".json", delete=False
+            ) as key_file:
+                key_file.write(key_data)
+                tmp_key_path = key_file.name
+            creds = ee.ServiceAccountCredentials(None, tmp_key_path)
             ee.Initialize(creds, project=project_id)
         else:
             ee.Initialize(project=project_id)

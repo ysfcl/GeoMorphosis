@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node server.js",
+    "start": "prisma migrate deploy && node server.js",
     "lint": "next lint",
     "test": "node --test --loader ./tests/next-loader.mjs \"tests/**/*.test.js\""
   },
