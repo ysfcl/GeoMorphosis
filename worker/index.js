@@ -15,6 +15,10 @@ const ANALYSIS_TIMEOUT_MS = Number(process.env.ANALYSIS_TIMEOUT_MS) || 180000;
 
 const ALERT_TO = process.env.ALERT_EMAIL_TO || process.env.SMTP_USER;
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+// Bildirim API'si sunucu-sunucu cagrisidir; Railway ic agindan gitmesi hem
+// DNS sorunlarini asar hem de public internete cikmaz. FRONTEND_URL ise
+// e-posta/Telegram mesajlarindaki linkler icin public adres olarak kalir.
+const notifyBaseUrl = process.env.NOTIFY_BASE_URL || frontendUrl;
 const notificationInternalSecret = process.env.NOTIFICATION_INTERNAL_SECRET;
 
 const redisClient = createClient({
@@ -43,9 +47,9 @@ function extractCoordinates(payload) {
     return { lat: Number(lat), lon: Number(lon) };
 }
 
-// Erken uyarı eşiği: yüksek yangın riski veya kritik bitki örtüsü kaybı
+// Erken uyarı eşiği: yüksek ormansızlaşma riski veya kritik bitki örtüsü kaybı
 function shouldAlert(result) {
-    if (result?.fire_risk === 'yuksek') return true;
+    if (result?.deforestation_risk === 'yuksek') return true;
 
     const deforestation = result?.ai_results?.change_detection?.deforestation;
     return deforestation?.severity === 'CRITICAL';
@@ -60,7 +64,7 @@ function buildAlertText(taskId, result) {
         `Bölge: ${result?.region_name ?? 'Bilinmiyor'}`,
         `Koordinat: ${coords.lat}, ${coords.lon}`,
         '',
-        `Yangın riski: ${result?.fire_risk}`,
+        `Ormansızlaşma riski: ${result?.deforestation_risk}`,
         `Kirlilik seviyesi: ${result?.pollution_level}`,
         `NDVI skoru: ${result?.ndvi_score}`,
         `Bitki örtüsü kaybı: %${deforestation.loss_percentage ?? 0} (${deforestation.severity ?? 'LOW'})`,
@@ -75,14 +79,14 @@ async function sendAnalysisEmailToSubscriber(userId, result) {
     const report = {
         lat: result?.coordinates?.lat,
         lng: result?.coordinates?.lon,
-        riskLevel: result?.fire_risk || 'normal',
+        riskLevel: result?.deforestation_risk || 'normal',
         summary: result?.demo_mode
             ? 'Uydu verisi alınamadığı için demo değerleri gösterildi.'
             : 'Bölge analizi tamamlandı, detaylar panelde görüntülenebilir.',
     };
 
     try {
-        const response = await fetch(`${frontendUrl}/api/notify/email/subscriber`, {
+        const response = await fetch(`${notifyBaseUrl}/api/notify/email/subscriber`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -156,7 +160,7 @@ async function processTask(taskId) {
 
         console.log(
             `[MUTFAK] Görev tamamlandı: ${taskId} | ` +
-            `yangın=${result.fire_risk} kirlilik=${result.pollution_level} ndvi=${result.ndvi_score}` +
+            `ormansızlaşma=${result.deforestation_risk ?? 'yok'} kirlilik=${result.pollution_level} ndvi=${result.ndvi_score}` +
             `${result.demo_mode ? ' (demo modu)' : ''}`
         );
 

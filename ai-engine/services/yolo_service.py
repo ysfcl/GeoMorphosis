@@ -5,17 +5,36 @@ AI_ENGINE_DIR = Path(__file__).resolve().parent.parent
 
 # Agirlik arama sirasi: fine-tune edilmis modeller once, en sonda pretrained nano.
 # best.pt ultralytics egitiminin dogrudan ciktisi (runs/detect/*/weights/best.pt);
-# train.py ise kopyaladigi dosyayi fire_yolov8_v2.pt olarak adlandiriyor.
+# train.py ise kopyaladigi dosyayi deforestation_yolov8_v2.pt olarak adlandiriyor.
 CANDIDATE_WEIGHTS = [
     AI_ENGINE_DIR / "models" / "best.pt",
-    AI_ENGINE_DIR / "models" / "fire_yolov8_v2.pt",
-    AI_ENGINE_DIR / "models" / "fire_yolov8.pt",
+    AI_ENGINE_DIR / "models" / "deforestation_yolov8_v2.pt",
+    AI_ENGINE_DIR / "models" / "deforestation_yolov8.pt",
     AI_ENGINE_DIR / "yolov8n.pt",
 ]
 
 # prepare_yolo_dataset.py CLASSES ile ayni sira; model kendi isimlerini
 # bildirmezse bu liste yedek olarak kullanilir.
-FALLBACK_CLASS_NAMES = ["fire", "pollution"]
+FALLBACK_CLASS_NAMES = ["deforestation", "pollution"]
+
+# best.pt egitimi sirasinda siniflara "fire" adi verilmisti; API sozlesmesi
+# artik deforestation kullaniyor. Agirligi yeniden egitmeden isimler
+# yukleme aninda bu esleme ile duzeltilir.
+CLASS_NAME_ALIASES = {"fire": "deforestation"}
+
+
+def _normalize_class_names(model):
+    """Model icine gomulu eski sinif adlarini guncel sozlesmeye cevirir."""
+    names = getattr(model, "names", None)
+    if isinstance(names, dict):
+        model.names = {
+            idx: CLASS_NAME_ALIASES.get(str(name), str(name))
+            for idx, name in names.items()
+        }
+    elif isinstance(names, (list, tuple)):
+        model.names = [
+            CLASS_NAME_ALIASES.get(str(name), str(name)) for name in names
+        ]
 
 CONFIDENCE_THRESHOLD = float(os.environ.get("YOLO_CONF_THRESHOLD", "0.25"))
 
@@ -51,6 +70,7 @@ class YoloService:
                 from ultralytics import YOLO
 
                 cls.model = YOLO(str(path))
+                _normalize_class_names(cls.model)
                 cls.model_path = str(path)
                 cls.available = True
                 print(f"YOLO modeli yuklendi: {path} | siniflar: {cls.model.names}")
