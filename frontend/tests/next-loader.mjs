@@ -9,6 +9,13 @@ export async function resolve(specifier, context, nextResolve) {
     };
   }
 
+  if (specifier === '@/lib/prisma') {
+    return {
+      url: new URL('./stubs/prisma.js', import.meta.url).href,
+      shortCircuit: true,
+    };
+  }
+
   if (specifier.startsWith('@/')) {
     const relativePath = specifier.slice(2);
     const candidates = [

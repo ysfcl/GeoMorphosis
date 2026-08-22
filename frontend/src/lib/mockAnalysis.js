@@ -3,11 +3,11 @@
 // Gerçek backend'e ulaşılamadığında (502/404) bu veri döndürülür.
 
 const REGIONS = {
-  bursa: { name: 'Bursa', ndvi: 0.68, fire: 'dusuk', pollution: 'orta' },
-  istanbul: { name: 'İstanbul', ndvi: 0.42, fire: 'orta', pollution: 'yuksek' },
-  marmaris: { name: 'Marmaris', ndvi: 0.71, fire: 'dusuk', pollution: 'yok' },
-  ankara: { name: 'Ankara', ndvi: 0.35, fire: 'dusuk', pollution: 'orta' },
-  default: { name: 'Bölge', ndvi: 0.55, fire: 'dusuk', pollution: 'orta' },
+  bursa: { name: 'Bursa', ndvi: 0.68, deforestation: 'dusuk', pollution: 'orta' },
+  istanbul: { name: 'İstanbul', ndvi: 0.42, deforestation: 'orta', pollution: 'yuksek' },
+  marmaris: { name: 'Marmaris', ndvi: 0.71, deforestation: 'dusuk', pollution: 'yok' },
+  ankara: { name: 'Ankara', ndvi: 0.35, deforestation: 'dusuk', pollution: 'orta' },
+  default: { name: 'Bölge', ndvi: 0.55, deforestation: 'dusuk', pollution: 'orta' },
 };
 
 function pickRegion(lat, lon) {
@@ -29,16 +29,16 @@ export function buildMockAnalysis({ taskId, lat, lon, regionName }) {
     result: {
       region_name: regionName || region.name,
       ndvi_score: region.ndvi,
-      fire_risk: region.fire,
+      deforestation_risk: region.deforestation,
       pollution_level: region.pollution,
       status: 'completed',
       timestamp: new Date().toISOString(),
       generated_path: [
-        { lat: lat + 0.003, lng: lon + 0.002 },
-        { lat: lat - 0.002, lng: lon + 0.004 },
-        { lat: lat + 0.001, lng: lon - 0.003 },
-        { lat: lat - 0.004, lng: lon - 0.001 },
-        { lat: lat + 0.005, lng: lon + 0.001 },
+        { lat: lat + 0.003, lon: lon + 0.002 },
+        { lat: lat - 0.002, lon: lon + 0.004 },
+        { lat: lat + 0.001, lon: lon - 0.003 },
+        { lat: lat - 0.004, lon: lon - 0.001 },
+        { lat: lat + 0.005, lon: lon + 0.001 },
       ],
     },
   };

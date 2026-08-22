@@ -27,7 +27,7 @@ export default function Report({ data }) {
     const date = new Date().toLocaleString('tr-TR');
     const region = data?.region_name || 'Bilinmeyen Bölge';
     const ndvi = data?.ndvi_score || 'N/A';
-    const fireRisk = data?.fire_risk || 'N/A';
+    const deforestationRisk = data?.deforestation_risk || 'N/A';
     const pollution = data?.pollution_level || 'N/A';
 
     let yPos = 50;
@@ -39,7 +39,7 @@ export default function Report({ data }) {
     yPos += lineSpacing;
     doc.text(`NDVI Skoru: ${ndvi}`, 20, yPos);
     yPos += lineSpacing;
-    doc.text(`Yangin Riski: ${fireRisk.toUpperCase()}`, 20, yPos);
+    doc.text(`Ormansizlasma Riski: ${deforestationRisk.toUpperCase()}`, 20, yPos);
     yPos += lineSpacing;
     doc.text(`Kirlilik Seviyesi: ${pollution.toUpperCase()}`, 20, yPos);
 
@@ -93,8 +93,8 @@ export default function Report({ data }) {
                   <span className="font-semibold text-green-600">{data?.ndvi_score || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-200 pb-3">
-                  <span className="text-gray-500">Yangın Riski:</span>
-                  <span className="font-semibold text-red-600 capitalize">{data?.fire_risk || 'N/A'}</span>
+                  <span className="text-gray-500">Ormansızlaşma Riski:</span>
+                  <span className="font-semibold text-orange-600 capitalize">{data?.deforestation_risk || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between pb-1">
                   <span className="text-gray-500">Kirlilik:</span>

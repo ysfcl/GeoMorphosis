@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { POST as analyzePOST, GET as analyzeGET } from '../src/app/api/analyze/route.js';
 import { POST as subscribePOST } from '../src/app/api/subscribe/route.js';
+import { POST as verifyEmailPOST } from '../src/app/api/notify/email/verify/route.js';
 import { POST as notifyEmailPOST } from '../src/app/api/notify/email/route.js';
 import { POST as notifyTelegramPOST } from '../src/app/api/notify/route.js';
 
@@ -26,10 +27,12 @@ function withMockedFetch(mockImplementation, callback) {
 }
 
 test('subscribe route accepts a valid subscription payload', async () => {
+  // Abonelik artik Prisma uzerinden yaziliyor; testlerde @/lib/prisma
+  // tests/stubs/prisma.js ile karsilanir, gercek veritabanina dokunulmaz.
   const response = await subscribePOST(
     createJsonRequest({
       email: 'qa@example.com',
-      region_id: 42,
+      user_id: 'qa-user-42',
       notification_type: 'email',
     })
   );
@@ -40,9 +43,32 @@ test('subscribe route accepts a valid subscription payload', async () => {
   assert.equal(payload.success, true);
   assert.deepEqual(payload.subscription, {
     email: 'qa@example.com',
-    region_id: 42,
     notification_type: 'email',
   });
+  // SMTP yapilandirilmadigindan dogrulama kodu devCode olarak doner.
+  assert.match(payload.devCode, /^\d{6}$/);
+});
+
+test('email verify route confirms the matching code', async () => {
+  const response = await verifyEmailPOST(
+    createJsonRequest({ userId: 'qa-user-42', code: '123456' })
+  );
+
+  assert.equal(response.status, 200);
+
+  const payload = await response.json();
+  assert.equal(payload.success, true);
+});
+
+test('email verify route rejects a wrong code', async () => {
+  const response = await verifyEmailPOST(
+    createJsonRequest({ userId: 'qa-user-42', code: '000000' })
+  );
+
+  assert.equal(response.status, 400);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
 });
 
 test('notify email route blocks incomplete payloads before external delivery', async () => {
@@ -118,6 +144,8 @@ test('analyze route forwards the regional payload to the AI engine and returns t
       end_points: [{ lat: 36.862, lng: 28.2815 }],
       buffer_meters: 750,
       region_name: 'Test region',
+      user_id: null,
+      bbox: null,
     });
   });
 
@@ -157,7 +185,7 @@ test('analyze polling route returns the final task status and notifies on comple
 
     if (requestUrl.includes('/api/status/task-456')) {
       return new Response(
-        JSON.stringify({ status: 'completed', result: { fire_risk: 'orta', pollution_level: 'düşük' } }),
+        JSON.stringify({ status: 'completed', result: { deforestation_risk: 'orta', pollution_level: 'düşük' } }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -178,7 +206,7 @@ test('analyze polling route returns the final task status and notifies on comple
 
     const payload = await response.json();
     assert.equal(payload.status, 'completed');
-    assert.equal(payload.result.fire_risk, 'orta');
+    assert.equal(payload.result.deforestation_risk, 'orta');
     assert.equal(calls.filter((entry) => entry.includes('/api/status/task-456')).length, 1);
     assert.equal(calls.filter((entry) => entry.includes('api.telegram.org')).length, 1);
   });

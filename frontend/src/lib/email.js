@@ -26,6 +26,11 @@ function getTransporter() {
   return transporter;
 }
 
+/** SMTP ayarlari dolu mu? Dogrulama kodu fallback'i icin route'larda kullanilir. */
+export function isEmailConfigured() {
+  return Boolean(getTransporter());
+}
+
 export async function sendEmailNotification(to, message, title = 'Sistem Bildirimi') {
   const transport = getTransporter();
 
@@ -52,7 +57,7 @@ export async function sendEmailNotification(to, message, title = 'Sistem Bildiri
 
 export async function sendAnalysisEmailToUser(userId, report) {
   try {
-    const subscription = getActiveEmailSubscription(userId);
+    const subscription = await getActiveEmailSubscription(userId);
 
     if (!subscription) {
       console.warn('Kullanıcının aktif e-posta aboneliği bulunamadı, rapor atlanıyor.');
@@ -67,7 +72,7 @@ export async function sendAnalysisEmailToUser(userId, report) {
     };
     const risk = riskLabels[report.riskLevel] || 'Normal';
     const message = [
-      `Konum: ${report.lat}, ${report.lng}`,
+      `Konum: ${report.lat}, ${report.lon}`,
       `Risk seviyesi: ${risk}`,
       '',
       report.summary,

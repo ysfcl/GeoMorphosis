@@ -45,8 +45,8 @@ export async function POST(request) {
       const data = await response.json(); // Burada sadece { task_id, message } dönecek
 
       const firstPoint = start_points[0];
-      // Frontend farklı isimlendirmelerle nokta gönderebiliyor
-      const lon = firstPoint.lng ?? firstPoint.lon ?? firstPoint.longitude;
+      // Standart anahtar lon; eski istemciler icin lng/longitude toleransı korunur
+      const lon = firstPoint.lon ?? firstPoint.lng ?? firstPoint.longitude;
 
       // Telegram'a analizin BAŞLADIĞINI (kuyruğa alındığını) bildiriyoruz
       await sendSystemTelegramNotification(
@@ -80,7 +80,8 @@ export async function GET(request) {
   const taskId = searchParams.get('task_id');
   const userId = searchParams.get('user_id');
   const reportLat = searchParams.get('lat');
-  const reportLng = searchParams.get('lng');
+  // Standart anahtar lon; eski istemciler icin lng toleransı korunur.
+  const reportLon = searchParams.get('lon') ?? searchParams.get('lng');
 
   if (taskId) {
   try {
@@ -95,8 +96,8 @@ export async function GET(request) {
     if (statusData.status === 'completed') {
        const report = {
          lat: reportLat,
-         lng: reportLng,
-         riskLevel: statusData.result?.fire_risk || 'normal',
+         lon: reportLon,
+         riskLevel: statusData.result?.deforestation_risk || 'normal',
          summary: statusData.result?.demo_mode
            ? 'Uydu verisi alınamadığı için demo değerleri gösterildi.'
            : 'Bölge analizi tamamlandı, detaylar panelde görüntülenebilir.',

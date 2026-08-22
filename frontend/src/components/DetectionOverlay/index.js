@@ -2,7 +2,7 @@
 
 // analysis_service sinif adlarini ASCII kucuk harf uretiyor (yolo_service.class_name)
 const CLASS_STYLES = {
-  fire: { box: 'border-red-500', label: 'bg-red-500', text: 'Yangın' },
+  deforestation: { box: 'border-orange-600', label: 'bg-orange-600', text: 'Ormansızlaşma' },
   pollution: { box: 'border-yellow-400', label: 'bg-yellow-400', text: 'Kirlilik' },
 };
 
