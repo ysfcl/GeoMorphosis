@@ -49,7 +49,7 @@ def test_risk_level_never_exceeds_yuksek():
         ({"detected": True, "severity": "CRITICAL"}, "yuksek"),
     ],
 )
-def test_vegetation_loss_maps_to_fire_risk(deforestation, expected):
+def test_vegetation_loss_maps_to_deforestation_risk(deforestation, expected):
     assert analysis_service._risk_from_vegetation_loss(deforestation) == expected
 
 
@@ -86,7 +86,7 @@ def test_analyze_region_returns_full_contract_in_demo_mode(monkeypatch):
     assert result["region_name"] == "36.8530, 28.2715"
     assert result["ndvi_score"] == 0.0
     # Report/index.js bu alanlarda .toUpperCase() cagiriyor, None olmamali
-    assert result["fire_risk"] == "yok"
+    assert result["deforestation_risk"] == "yok"
     assert result["pollution_level"] == "yok"
     assert result["status"]
     assert result["timestamp"]
@@ -135,7 +135,7 @@ def test_analyze_region_derives_flat_fields_from_detections(monkeypatch, tmp_pat
 
     assert result["region_name"] == "Bursa"
     assert result["model_loaded"] is True
-    assert result["fire_risk"] == "yuksek"
+    assert result["deforestation_risk"] == "yuksek"
     assert result["pollution_level"] == "orta"
     assert len(result["ai_results"]["yolo_detections"]) == 2
     assert result["ai_results"]["yolo_detections"][0]["class"] == "fire"

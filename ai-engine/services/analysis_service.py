@@ -198,8 +198,8 @@ def analyze_region(
         },
     }
 
-    fire_risk = _max_risk(
-        _risk_from_detections(detections, "fire"),
+    deforestation_risk = _max_risk(
+        _risk_from_detections(detections, "deforestation"),
         _risk_from_vegetation_loss(deforestation),
     )
     pollution_level = _risk_from_detections(detections, "pollution")
@@ -211,7 +211,7 @@ def analyze_region(
         "region_name": region_name or f"{lat:.4f}, {lon:.4f}",
         "coordinates": {"lat": lat, "lon": lon, "buffer_meters": buffer_meters},
         "ndvi_score": ndvi_t2_mean,
-        "fire_risk": fire_risk,
+        "deforestation_risk": deforestation_risk,
         "pollution_level": pollution_level,
         # --- Durum bayraklari ---
         "demo_mode": demo_mode,
