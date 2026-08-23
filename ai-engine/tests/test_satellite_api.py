@@ -23,3 +23,12 @@ def test_clamp_buffer_floors_tiny_values():
 def test_clamp_buffer_handles_garbage():
     assert _clamp_buffer(None) == 1000
     assert _clamp_buffer("abc") == 1000
+
+
+def test_scale_maiac_aod_applies_catalog_scale():
+    """GEE ham degeri x0.001 olceklenmeli; yoksa her bolge 'yuksek' cikar."""
+    from services.satellite_api import _scale_maiac_aod
+
+    assert _scale_maiac_aod(120) == 0.12
+    assert _scale_maiac_aod(550) == 0.55
+    assert _scale_maiac_aod(45.5) == 0.0455

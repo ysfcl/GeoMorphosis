@@ -29,13 +29,6 @@ function resolveCoordinates(region) {
   return null;
 }
 
-const RISK_LABELS = {
-  yok: 'Yok',
-  dusuk: 'Düşük',
-  orta: 'Orta',
-  yuksek: 'Yüksek',
-};
-
 export default function Home() {
   const router = useRouter();
 
@@ -213,7 +206,7 @@ export default function Home() {
         <div className="h-full px-8 flex items-center justify-between">
           <a href="/" className="flex items-center gap-4 group cursor-pointer decoration-transparent">
             <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg transition-transform duration-300 ease-out group-hover:scale-110 group-hover:-rotate-3 group-active:scale-95">
-              <img src="logo.png" alt="Logo" className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" />
+              <img src="world.jpg" alt="Logo" className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" />
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">GeoMorphosis</h1>
@@ -414,19 +407,6 @@ export default function Home() {
           <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-5">
             <p className="text-blue-700 dark:text-blue-400 font-semibold animate-pulse">Yapay zekâ bölgeyi işliyor...</p>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 break-all">Fiş No: {taskId}</p>
-          </div>
-        </div>
-      )}
-
-      {analysisResult && (
-        <div className="absolute bottom-8 right-4 z-[1000] w-full max-w-sm">
-          <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-2xl p-5">
-            <h3 className="font-bold text-green-700 dark:text-green-400 text-lg">✓ Analiz tamamlandı</h3>
-            <div className="mt-3 space-y-2 text-gray-700 dark:text-gray-200">
-              <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">NDVI skoru</span><span className="font-semibold">{analysisResult.ndvi_score}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Ormansızlaşma</span><span className="font-semibold">{RISK_LABELS[analysisResult.deforestation_risk] ?? '-'}{(typeof analysisResult.deforestation_loss_percent === 'number' && analysisResult.deforestation_loss_percent > 0) ? ` (%${analysisResult.deforestation_loss_percent.toFixed(2)})` : ((analysisResult.deforestation_detections || 0) > 0 ? ` (${analysisResult.deforestation_detections} tespit)` : '')}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Kirlilik</span><span className="font-semibold">{RISK_LABELS[analysisResult.pollution_level] ?? '-'}{typeof analysisResult.pollution_aod === 'number' ? ` (AOD ${analysisResult.pollution_aod.toFixed(2)})` : ''}</span></div>
-            </div>
           </div>
         </div>
       )}

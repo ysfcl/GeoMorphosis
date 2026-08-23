@@ -122,6 +122,16 @@ def _init_earth_engine():
         print("Demo moduyla calisilacak")
 
 
+def _scale_maiac_aod(value):
+    """MAIAC MCD19A2 AOD ham degerini gercek birime cevirir.
+
+    GEE katalogunda Optical_Depth_047 bandinin olcegi 0.001'dir ve GEE
+    bunu OTOMATIK UYGULAMAZ. Ham degerler temiz havada bile 50-300 arasidir;
+    olceklenmeden esiklerle karsilastirilirsa her koordinat "yuksek" cikar.
+    """
+    return float(value) * 0.001
+
+
 def get_modis_aod(lat: float, lon: float, buffer_meters: int = 1000):
     """Bolgenin son 30 gune ait MODIS AOD (Optical_Depth_047) medyanini doner.
 
@@ -167,7 +177,9 @@ def get_modis_aod(lat: float, lon: float, buffer_meters: int = 1000):
             .getInfo()
         )
         if value is not None:
-            return float(value)
+            aod = _scale_maiac_aod(value)
+            print(f"satellite_api: MODIS AOD ham={value} -> olcekli={aod}")
+            return aod
     except Exception as e:
         print(f"satellite_api: AOD sorgusu basarisiz: {e}")
     return None
