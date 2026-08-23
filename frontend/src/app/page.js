@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sun, Moon, Send, Info, Bell, Mail, Monitor, X } from 'lucide-react';
 import Map from '@/components/Map';
@@ -89,11 +89,16 @@ export default function Home() {
         const statusData = await res.json();
 
         if (statusData.status === 'completed') {
-          stopPolling();
-          setAnalysisResult(statusData.result || statusData);
-          setLoading(false);
-          setToast({ type: 'success', title: 'Analiz Tamamlandı', message: 'Bölge analizi başarıyla sonuçlandı.' });
-        } else if (statusData.status === 'failed') {
+  stopPolling();
+  setAnalysisResult(statusData.result || statusData);
+  setLoading(false);
+  setToast({ type: 'success', title: 'Analiz Tamamlandı', message: 'Bölge analizi başarıyla sonuçlandı.' });
+
+  // Analiz tamamlanınca otomatik olarak detay sayfasına yönlendir
+  const params = new URLSearchParams({ lat: String(coordinates.lat), lon: String(coordinates.lon) });
+  params.set('task_id', id);
+  router.push(`/region?${params.toString()}`);
+} else if (statusData.status === 'failed') {
           stopPolling();
           setLoading(false);
           setToast({ type: 'danger', title: 'Analiz Hatası', message: statusData.error || 'Analiz tamamlanamadı.' });
@@ -106,6 +111,19 @@ export default function Home() {
       }
     }, POLL_INTERVAL_MS);
   };
+
+  // useCallback ile sabitliyoruz: aksi halde her render'da yeni bir
+  // fonksiyon referansi olusur, Map component'indeki harita baslatma
+  // useEffect'i buna bagimli oldugu icin harita surekli silinip yeniden
+  // kurulur (cizilen sekil ve isi haritasi katmanlari kaybolur).
+  const handleRegionSelect = useCallback((region) => {
+    setSelectedRegion(region);
+    // Yeni bir bolge cizildiginde onceki analiz sonucu artik gecersiz;
+    // isi haritasinin eski bolgenin verisini gostermeye devam etmemesi
+    // icin temizliyoruz.
+    setAnalysisResult(null);
+    setTaskId(null);
+  }, []);
 
   const handleAnalyze = async () => {
     if (!selectedRegion || loading) return;
@@ -183,18 +201,25 @@ export default function Home() {
   return (
     <main className="fixed inset-0 overflow-hidden bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
       <div className="absolute inset-0 z-0">
-        <Map onRegionSelect={setSelectedRegion} isDarkMode={isDarkMode} />
+        <Map
+          onRegionSelect={handleRegionSelect}
+          isDarkMode={isDarkMode}
+          selectedRegion={selectedRegion}
+          analysisResult={analysisResult}
+        />
       </div>
 
       <nav className="absolute top-0 left-0 right-0 z-[1000] h-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md shadow-sm border-b border-gray-200 dark:border-gray-800 transition-colors duration-300">
         <div className="h-full px-8 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-md">{/*<span className="text-white text-2xl font-bold">G</span>*/}<img src="logo.png" alt="Logo" className="w-full h-full object-contain" /></div>
+          <a href="/" className="flex items-center gap-4 group cursor-pointer decoration-transparent">
+            <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg transition-transform duration-300 ease-out group-hover:scale-110 group-hover:-rotate-3 group-active:scale-95">
+              <img src="logo.png" alt="Logo" className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" />
+            </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">GeoMorphosis</h1>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">GeoMorphosis</h1>
               <p className="text-lg text-gray-500 dark:text-gray-400 hidden sm:block">Çevresel İzleme Platformu</p>
             </div>
-          </div>
+          </a>
 
           <div className="flex items-center gap-3 md:gap-4">
             <p className="text-xl text-gray-500 dark:text-gray-400 hidden lg:block pr-4">Uydu Analiz Sistemi</p>
