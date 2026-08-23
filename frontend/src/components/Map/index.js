@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import mockHeatmapData from './mockHeatmapData';
-import { MAX_SELECTION_AREA_M2, MAX_SELECTION_AREA_KM2 } from '@/lib/mapLimits';
+import {
+  MAX_SELECTION_AREA_M2,
+  MAX_SELECTION_AREA_KM2,
+  deriveRadiusFromArea,
+} from '@/lib/mapLimits';
 
 const MAX_AREA_SQ_METERS = MAX_SELECTION_AREA_M2;
 
@@ -399,7 +403,9 @@ export default function Map({ onRegionSelect, isDarkMode }) {
 
             lon: center.lng,
 
-            radius: 1000,
+            // Cizimin alanindan turetilir; boylece AI motoru 4 km2'lik sabit
+            // pencere yerine cizime denk gelen pencereyi isler.
+            radius: deriveRadiusFromArea(drawnArea),
 
             // Cizilen poligonun jeodezik alani (m2) ve izinli ust sinir;
             // ana sayfa paneli "Secilen Alan" satirini buradan gosterir.

@@ -10,6 +10,22 @@ RGB_BANDS = ["B4", "B3", "B2"]
 NIR_BAND = "B8"
 THUMB_SIZE = "512x512"
 
+# Guvenlik kilidi: istemciden gelen buffer degeri ne kadar buyuk olursa olsun
+# GEE sorgusu kotayi patlatmasin ve thumbnail sabit 512px kalsin.
+# 5000m -> en fazla 10km x 10km (100 km2) pencere islenir; varsayilan cizim
+# siniri 25 km2'nin rahat uzerinde bir tavan.
+MAX_BUFFER_METERS = int(os.environ.get("MAX_BUFFER_METERS", "5000"))
+MIN_BUFFER_METERS = 250
+
+
+def _clamp_buffer(buffer_meters):
+    """buffer_meters degerini guvenli araliga [250, MAX_BUFFER_METERS] sikistirir."""
+    try:
+        value = float(buffer_meters)
+    except (TypeError, ValueError):
+        return 1000
+    return int(min(MAX_BUFFER_METERS, max(MIN_BUFFER_METERS, value)))
+
 
 class EarthEngineError(Exception):
     pass
@@ -116,6 +132,7 @@ def get_modis_aod(lat: float, lon: float, buffer_meters: int = 1000):
     GEE kullanilamiyor veya bolgede granul yoksa None doner; cagiran taraf
     deterministik fallback uygular.
     """
+    buffer_meters = _clamp_buffer(buffer_meters)
     _init_earth_engine()
     if not _ee_available:
         return None
@@ -204,6 +221,7 @@ def download_satellite_series(
     if years is None:
         years = [2020, 2023, 2025]
 
+    buffer_meters = _clamp_buffer(buffer_meters)
     _init_earth_engine()
 
     if not _ee_available:
@@ -298,6 +316,7 @@ def download_satellite_series(
 
 
 def get_latest_image(lat, lon, buffer_meters=1000):
+    buffer_meters = _clamp_buffer(buffer_meters)
     _init_earth_engine()
 
     if not _ee_available:
