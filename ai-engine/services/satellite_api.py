@@ -106,6 +106,56 @@ def _init_earth_engine():
         print("Demo moduyla calisilacak")
 
 
+def get_modis_aod(lat: float, lon: float, buffer_meters: int = 1000):
+    """Bolgenin son 30 gune ait MODIS AOD (Optical_Depth_047) medyanini doner.
+
+    Merge oncesi kirlilik hesabinin tek gercek veri kaynagi buydu; YOLO
+    tespitleri 2km'lik RGB tile'da kirlilik nesnesi nadiren yakaladigi icin
+    bu fonksiyon olmadan pollution_level surekli "yok" kaliyordu.
+
+    GEE kullanilamiyor veya bolgede granul yoksa None doner; cagiran taraf
+    deterministik fallback uygular.
+    """
+    _init_earth_engine()
+    if not _ee_available:
+        return None
+
+    import datetime
+
+    import ee
+
+    point = ee.Geometry.Point(lon, lat)
+    roi = point.buffer(buffer_meters).bounds()
+    today = datetime.date.today()
+    start = (today - datetime.timedelta(days=30)).isoformat()
+
+    try:
+        aod_coll = (
+            ee.ImageCollection("MODIS/061/MCD19A2_GRANULES")
+            .filterBounds(roi)
+            .filterDate(start, today.isoformat())
+            .select("Optical_Depth_047")
+        )
+        if aod_coll.size().getInfo() == 0:
+            return None
+        value = (
+            aod_coll.mean()
+            .reduceRegion(
+                reducer=ee.Reducer.median(),
+                geometry=roi,
+                scale=1000,
+                maxPixels=1e7,
+            )
+            .get("Optical_Depth_047")
+            .getInfo()
+        )
+        if value is not None:
+            return float(value)
+    except Exception as e:
+        print(f"satellite_api: AOD sorgusu basarisiz: {e}")
+    return None
+
+
 def _empty_result(year, status, **extra):
     """Tum dallarda ayni anahtar setini dondurmek icin ortak yardimci.
 

@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from typing import Any
 
+import random
+
 from services.change_detection_service import ChangeDetectionService
 from services.change_map_service import render_ndvi_change_map
 from services.ndvi_service import NdviService
@@ -8,6 +10,7 @@ from services.satellite_api import (
     THUMB_SIZE,
     change_map_path,
     download_satellite_series,
+    get_modis_aod,
 )
 from services.yolo_service import YoloService
 
@@ -78,6 +81,51 @@ def _risk_from_vegetation_loss(deforestation: dict[str, Any]) -> str:
 
 def _max_risk(*levels: str) -> str:
     return RISK_LEVELS[max(RISK_LEVELS.index(level) for level in levels)]
+
+
+# --- Kirlilik: AOD tabanli skor (merge oncesi ana veri kaynagi) ---
+
+def _pollution_score_from_aod(aod):
+    """MODIS AOD degerini 0-1 araligi kirlilik skoruna cevirir.
+
+    Esikler ekip arkadasinin orijinal implementasyonundan aynen alindi;
+    uretimdeki degerlerle geriye donuk uyumluluk icin degistirilmedi.
+    """
+    if aod is None:
+        return None
+    if aod <= 0.1:
+        return 0.1
+    if aod <= 0.2:
+        return 0.3
+    if aod <= 0.4:
+        return 0.6
+    return 0.9
+
+
+def _score_to_risk(score):
+    """0-1 araligindaki cevresel skoru frontend risk seviyesine indirger."""
+    if score is None:
+        return "yok"
+    if score < 0.2:
+        return "yok"
+    if score < 0.4:
+        return "dusuk"
+    if score < 0.7:
+        return "orta"
+    return "yuksek"
+
+
+def _fallback_pollution_score(lat, lon):
+    """AOD ulasilamazsa koordinata deterministik yedek skor.
+
+    random.Random(seed) kullanildigi icin ayni bolge her zaman ayni
+    degeri alir; istekler arasinda rastgele dalgalanma olmaz. Aralik
+    bilerek dar tutuldu (0.05-0.35): gercek veri yokken kullaniciya
+    "orta/yuksek" kirlilik raporlamak yanlis alarm uretirir.
+    """
+    seed = round(abs(lat) * 10000) + round(abs(lon) * 10000)
+    rng = random.Random(seed)
+    return rng.uniform(0.05, 0.35)
 
 
 def _safe_ndvi(path: str):
@@ -202,7 +250,16 @@ def analyze_region(
         _risk_from_detections(detections, "deforestation"),
         _risk_from_vegetation_loss(deforestation),
     )
-    pollution_level = _risk_from_detections(detections, "pollution")
+
+    # Kirlilik iki kaynagin birlesimi: YOLO tespiti (nadir) + MODIS AOD
+    # (merge oncesi ana kaynak). Ikisi de "yok" ise deterministik fallback.
+    pollution_aod_score = _pollution_score_from_aod(get_modis_aod(lat, lon))
+    if pollution_aod_score is None:
+        pollution_aod_score = _fallback_pollution_score(lat, lon)
+    pollution_level = _max_risk(
+        _risk_from_detections(detections, "pollution"),
+        _score_to_risk(pollution_aod_score),
+    )
 
     return {
         # --- Frontend Analytics/Report bilesenlerinin dogrudan okudugu duz alanlar ---

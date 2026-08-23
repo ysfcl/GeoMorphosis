@@ -87,7 +87,8 @@ def test_analyze_region_returns_full_contract_in_demo_mode(monkeypatch):
     assert result["ndvi_score"] == 0.0
     # Report/index.js bu alanlarda .toUpperCase() cagiriyor, None olmamali
     assert result["deforestation_risk"] == "yok"
-    assert result["pollution_level"] == "yok"
+    # AOD erisilemezse deterministik fallback devrede (0.05-0.35 bandi)
+    assert result["pollution_level"] in ("yok", "dusuk")
     assert result["status"]
     assert result["timestamp"]
     assert "yolo_detections" in result["ai_results"]
@@ -120,11 +121,11 @@ def test_analyze_region_derives_flat_fields_from_detections(monkeypatch, tmp_pat
         classmethod(
             lambda cls, path: {
                 "boxes": [
-                    {"class": "fire", "class_id": 0, "confidence": 0.82, "bbox": [1, 2, 3, 4]},
+                    {"class": "deforestation", "class_id": 0, "confidence": 0.82, "bbox": [1, 2, 3, 4]},
                     {"class": "pollution", "class_id": 1, "confidence": 0.45, "bbox": [5, 6, 7, 8]},
                 ],
                 "model_loaded": True,
-                "model_path": "models/fire_yolov8.pt",
+                "model_path": "models/deforestation_yolov8.pt",
             }
         ),
     )
@@ -138,7 +139,7 @@ def test_analyze_region_derives_flat_fields_from_detections(monkeypatch, tmp_pat
     assert result["deforestation_risk"] == "yuksek"
     assert result["pollution_level"] == "orta"
     assert len(result["ai_results"]["yolo_detections"]) == 2
-    assert result["ai_results"]["yolo_detections"][0]["class"] == "fire"
+    assert result["ai_results"]["yolo_detections"][0]["class"] == "deforestation"
 
 
 def test_images_field_is_empty_in_demo_mode(monkeypatch):
@@ -275,3 +276,34 @@ def test_change_map_is_null_when_rendering_fails(monkeypatch, tmp_path):
     images = analysis_service.analyze_region(36.853, 28.2715)["images"]
 
     assert images["change_map"] is None
+
+
+# --- Kirlilik: AOD tabanli skor yardimcilari ---
+
+def test_pollution_score_from_aod_thresholds():
+    from services.analysis_service import _pollution_score_from_aod
+
+    assert _pollution_score_from_aod(None) is None
+    assert _pollution_score_from_aod(0.05) == 0.1
+    assert _pollution_score_from_aod(0.15) == 0.3
+    assert _pollution_score_from_aod(0.3) == 0.6
+    assert _pollution_score_from_aod(0.5) == 0.9
+
+
+def test_score_to_risk_mapping():
+    from services.analysis_service import _score_to_risk
+
+    assert _score_to_risk(None) == "yok"
+    assert _score_to_risk(0.1) == "yok"
+    assert _score_to_risk(0.2) == "dusuk"
+    assert _score_to_risk(0.4) == "orta"
+    assert _score_to_risk(0.7) == "yuksek"
+
+
+def test_fallback_pollution_score_deterministic_and_capped():
+    from services.analysis_service import _fallback_pollution_score
+
+    first = _fallback_pollution_score(36.853, 28.2715)
+    second = _fallback_pollution_score(36.853, 28.2715)
+    assert first == second
+    assert 0.05 <= first <= 0.35
