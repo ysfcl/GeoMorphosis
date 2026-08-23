@@ -89,11 +89,16 @@ export default function Home() {
         const statusData = await res.json();
 
         if (statusData.status === 'completed') {
-          stopPolling();
-          setAnalysisResult(statusData.result || statusData);
-          setLoading(false);
-          setToast({ type: 'success', title: 'Analiz Tamamlandı', message: 'Bölge analizi başarıyla sonuçlandı.' });
-        } else if (statusData.status === 'failed') {
+  stopPolling();
+  setAnalysisResult(statusData.result || statusData);
+  setLoading(false);
+  setToast({ type: 'success', title: 'Analiz Tamamlandı', message: 'Bölge analizi başarıyla sonuçlandı.' });
+
+  // Analiz tamamlanınca otomatik olarak detay sayfasına yönlendir
+  const params = new URLSearchParams({ lat: String(coordinates.lat), lon: String(coordinates.lon) });
+  params.set('task_id', id);
+  router.push(`/region?${params.toString()}`);
+} else if (statusData.status === 'failed') {
           stopPolling();
           setLoading(false);
           setToast({ type: 'danger', title: 'Analiz Hatası', message: statusData.error || 'Analiz tamamlanamadı.' });
