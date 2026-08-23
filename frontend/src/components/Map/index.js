@@ -1,12 +1,55 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
-import mockHeatmapData from './mockHeatmapData';
 import { MAX_SELECTION_AREA_M2, MAX_SELECTION_AREA_KM2 } from '@/lib/mapLimits';
 
 const MAX_AREA_SQ_METERS = MAX_SELECTION_AREA_M2;
 
-export default function Map({ onRegionSelect, isDarkMode }) {
+// Backend'in dondurdugu kategori -> yuzde eslemesi (Analytics/index.js ile
+// ayni sabitler). pollution_score sayisal olarak gelmediginde fallback icin.
+const RISK_PERCENT = { yok: 0, dusuk: 0.28, orta: 0.58, yuksek: 0.9 };
+
+function normalizeRisk(value) {
+  if (!value) return 'yok';
+  return String(value).toLowerCase();
+}
+
+const METERS_PER_DEG_LAT = 111320;
+
+// Secilen bolgenin merkezi etrafinda, verilen yogunluga (0-1) sahip rastgele
+// dagilmis isi noktalari uretir. Backend tek bir skaler deger dondurdugu icin
+// (piksel piksel harita yok), gercek veriyi gorsel bir isi bulutuna
+// donusturmenin en basit yolu bu: merkeze yakin noktalar daha yogun,
+// disa dogru hafif dogal bir dagilim.
+function generateHeatPoints(centerLat, centerLon, radiusMeters, intensity, count = 18) {
+  if (!intensity || intensity <= 0) return [];
+
+  const points = [];
+  const latDegPerMeter = 1 / METERS_PER_DEG_LAT;
+  const lonDegPerMeter =
+    1 / (METERS_PER_DEG_LAT * Math.cos((centerLat * Math.PI) / 180) || 1);
+
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    // sqrt(random) ile noktalari merkeze dogru yogunlastiriyoruz
+    const distance = Math.sqrt(Math.random()) * radiusMeters;
+
+    const dLat = distance * Math.sin(angle) * latDegPerMeter;
+    const dLon = distance * Math.cos(angle) * lonDegPerMeter;
+
+    const jitter = (Math.random() - 0.5) * 0.15;
+    const pointIntensity = Math.min(1, Math.max(0, intensity + jitter));
+
+    points.push([centerLat + dLat, centerLon + dLon, pointIntensity]);
+  }
+
+  // Merkeze guclu bir nokta ekleyerek odagin net gorunmesini sagliyoruz.
+  points.push([centerLat, centerLon, Math.min(1, intensity)]);
+
+  return points;
+}
+
+export default function Map({ onRegionSelect, isDarkMode, selectedRegion, analysisResult }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layersRef = useRef({});
@@ -16,6 +59,15 @@ export default function Map({ onRegionSelect, isDarkMode }) {
     pollution: false,
     vegetation: true,
   });
+
+  // NOT: onRegionSelect kasitli olarak bagimlilik listesinde degil.
+  // Bu bir callback prop'u; degismesi haritanin tamamen yeniden
+  // kurulmasini (ve cizilen sekillerin/isi haritasinin kaybolmasini)
+  // gerektirmez. Guncel referansa bir ref uzerinden erisiyoruz.
+  const onRegionSelectRef = useRef(onRegionSelect);
+  useEffect(() => {
+    onRegionSelectRef.current = onRegionSelect;
+  }, [onRegionSelect]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -30,14 +82,14 @@ export default function Map({ onRegionSelect, isDarkMode }) {
 
       if (mapInstanceRef.current) return;
 
-      // --- ALAN HESAPLAMA & SINIRLANDIRMA FONKSİYONLARI ---
+      // --- ALAN HESAPLAMA & SINIRLANDIRMA FONKSIYONLARI ---
       const calculateGeodesicArea = (latLngs) => {
         return L.GeometryUtil
           ? L.GeometryUtil.geodesicArea(latLngs)
           : computeApproxArea(latLngs);
       };
 
-      // Basit geodesic alan hesabı
+      // Basit geodesic alan hesabi
       const computeApproxArea = (coords) => {
         const RADIUS = 6378137;
         let area = 0;
@@ -63,7 +115,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
         );
       };
 
-      // Dikdörtgen çizilirken sınır aşımında farenin gidebileceği maksimum noktayı hesaplar
+      // Dikdortgen cizilirken sinir asiminda farenin gidebilecegi maksimum noktayi hesaplar
       const clampRectangleLatLng = (
         startLatLng,
         currentLatLng,
@@ -123,7 +175,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
         return currentLatLng;
       };
 
-      // Leaflet.Draw Dikdörtgen Sürükleme Davranışını Genişletme
+      // Leaflet.Draw Dikdortgen Surukleme Davranisini Genisletme
       if (L.Draw && L.Draw.Rectangle) {
         L.Draw.Rectangle.prototype._onMouseMove =
           function (e) {
@@ -161,7 +213,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
         .addTo(map);
 
       // ====================================================
-      // NORMAL HARİTA
+      // NORMAL HARITA
       // ====================================================
 
       const normalMap = L.tileLayer(
@@ -173,7 +225,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
       );
 
       // ====================================================
-      // DARK HARİTA
+      // DARK HARITA
       // ====================================================
 
       const darkMap = L.tileLayer(
@@ -187,13 +239,13 @@ export default function Map({ onRegionSelect, isDarkMode }) {
       );
 
       // ====================================================
-      // UYDU HARİTASI
+      // UYDU HARITASI
       // ====================================================
 
       const satelliteMap = L.tileLayer(
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         {
-          attribution: 'Tiles © Esri',
+          attribution: 'Tiles (c) Esri',
           maxZoom: 19,
         }
       );
@@ -205,31 +257,14 @@ export default function Map({ onRegionSelect, isDarkMode }) {
       }
 
       // ====================================================
-      // ISI HARİTASI KATMANLARI
-      // ====================================================
-
-      const pollutionHeatData =
-        mockHeatmapData.map((p) => [
-          p.lat,
-          p.lon,
-          p.intensity
-        ]);
-
-      const vegetationHeatData =
-        mockHeatmapData.map((p) => [
-          p.lat,
-          p.lon,
-          p.intensity
-        ]);
-
-      // ====================================================
-      // KİRLİLİK HEATMAP
-      // SADECE GÖRÜNTÜ KOYULAŞTIRILDI
+      // ISI HARITASI KATMANLARI
+      // Baslangicta bos: sabit/mock veri yerine yalnizca gercek bir bolge
+      // secilip analiz tamamlandiginda dolduruluyor (asagidaki ayri effect).
       // ====================================================
 
       const pollutionLayer =
         L.heatLayer(
-          pollutionHeatData,
+          [],
           {
             radius: 35,
             blur: 18,
@@ -245,14 +280,9 @@ export default function Map({ onRegionSelect, isDarkMode }) {
           }
         );
 
-      // ====================================================
-      // NDVI / BİTKİ ÖRTÜSÜ HEATMAP
-      // SADECE GÖRÜNTÜ KOYULAŞTIRILDI
-      // ====================================================
-
       const vegetationLayer =
         L.heatLayer(
-          vegetationHeatData,
+          [],
           {
             radius: 35,
             blur: 18,
@@ -269,7 +299,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
         );
 
       // ====================================================
-      // AKTİF KATMANLAR
+      // AKTIF KATMANLAR
       // ====================================================
 
       if (activeOverlays.pollution) {
@@ -316,7 +346,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
       map.addControl(drawControl);
 
       // ====================================================
-      // ALAN SEÇİLDİĞİNDE
+      // ALAN SECILDIGINDE
       // ====================================================
 
       map.on(
@@ -341,7 +371,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
             );
 
           // ==================================================
-          // MAKSİMUM ALAN KONTROLÜ
+          // MAKSIMUM ALAN KONTROLU
           // ==================================================
 
           if (
@@ -349,19 +379,19 @@ export default function Map({ onRegionSelect, isDarkMode }) {
             MAX_AREA_SQ_METERS
           ) {
             alert(
-              `Seçilen alan maksimum sınırı (${(
+              `Secilen alan maksimum siniri (${(
                 MAX_AREA_SQ_METERS /
                 1000000
               ).toFixed(
                 0
-              )} km²) aşıyor! Lütfen daha küçük bir alan seçin.`
+              )} km2) asiyor! Lutfen daha kucuk bir alan secin.`
             );
 
             return;
           }
 
           // ==================================================
-          // SEÇİLEN ALANI EKLE
+          // SECILEN ALANI EKLE
           // ==================================================
 
           drawnItems.addLayer(layer);
@@ -374,7 +404,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
             layer.toGeoJSON();
 
           console.log(
-            'Üretilen GeoJSON Verisi:',
+            'Uretilen GeoJSON Verisi:',
             geoJsonData
           );
 
@@ -388,10 +418,10 @@ export default function Map({ onRegionSelect, isDarkMode }) {
               .getCenter();
 
           // ==================================================
-          // PARENT COMPONENT'E GÖNDER
+          // PARENT COMPONENT'E GONDER
           // ==================================================
 
-          onRegionSelect?.({
+          onRegionSelectRef.current?.({
             geoJson:
               geoJsonData,
 
@@ -442,9 +472,70 @@ export default function Map({ onRegionSelect, isDarkMode }) {
       }
     };
   }, [
-    onRegionSelect,
     isDarkMode
   ]);
+
+  // ========================================================
+  // ISI HARITASI VERISINI GERCEK ANALIZE GORE GUNCELLE
+  // Secilen bolge veya analiz sonucu degistiginde, heatLayer'lari
+  // (mock veri yerine) gercek NDVI / kirlilik degerlerinden uretilen
+  // noktalarla yeniden dolduruyoruz.
+  // ========================================================
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const { pollutionLayer, vegetationLayer } = layersRef.current;
+
+    if (!map || !pollutionLayer || !vegetationLayer) return;
+
+    // Henuz bolge secilmediyse veya analiz sonucu yoksa katmanlari bosalt;
+    // eski/baska bir bolgenin isi haritasi ekranda kalmasin.
+    if (
+      !selectedRegion ||
+      typeof selectedRegion.lat !== 'number' ||
+      typeof selectedRegion.lon !== 'number' ||
+      !analysisResult
+    ) {
+      pollutionLayer.setLatLngs([]);
+      vegetationLayer.setLatLngs([]);
+      return;
+    }
+
+    const radiusMeters = selectedRegion.area_sq_meters
+      ? Math.sqrt(selectedRegion.area_sq_meters / Math.PI)
+      : selectedRegion.radius || 900;
+
+    // NDVI 0-1 araliginda bir deger; dogrudan yogunluk olarak kullanilabilir.
+    const ndviIntensity =
+      typeof analysisResult.ndvi_score === 'number'
+        ? Math.min(1, Math.max(0, analysisResult.ndvi_score))
+        : 0;
+
+    // Kirlilik icin backend gercek sayisal skor (pollution_score, 0-100)
+    // dondurdugunde onu kullaniyoruz; dondurmuyorsa kategori tabanli sabit
+    // orana geri donuyoruz (Analytics/index.js ile ayni mantik).
+    const pollutionIntensity =
+      typeof analysisResult.pollution_score === 'number'
+        ? Math.min(1, Math.max(0, analysisResult.pollution_score / 100))
+        : RISK_PERCENT[normalizeRisk(analysisResult.pollution_level)] ?? 0;
+
+    vegetationLayer.setLatLngs(
+      generateHeatPoints(
+        selectedRegion.lat,
+        selectedRegion.lon,
+        radiusMeters,
+        ndviIntensity
+      )
+    );
+
+    pollutionLayer.setLatLngs(
+      generateHeatPoints(
+        selectedRegion.lat,
+        selectedRegion.lon,
+        radiusMeters,
+        pollutionIntensity
+      )
+    );
+  }, [selectedRegion, analysisResult]);
 
   // ========================================================
   // DARK / NORMAL MAP
@@ -487,7 +578,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
   ]);
 
   // ========================================================
-  // BASE MAP DEĞİŞTİRME
+  // BASE MAP DEGISTIRME
   // ========================================================
 
   const handleBaseMapChange = (
@@ -606,13 +697,13 @@ export default function Map({ onRegionSelect, isDarkMode }) {
   const overlayOptions = [
     {
       key: 'pollution',
-      label: 'Kirlilik Katmanı',
+      label: 'Kirlilik Katmani',
       color: 'bg-blue-500'
     },
 
     {
       key: 'vegetation',
-      label: 'NDVI (Bitki Örtüsü)',
+      label: 'NDVI (Bitki Ortusu)',
       color: 'bg-green-500'
     }
   ];
@@ -630,12 +721,12 @@ export default function Map({ onRegionSelect, isDarkMode }) {
         className="w-full h-full"
       />
 
-      {/* Sol Harita Görünümü Paneli */}
+      {/* Sol Harita Gorunumu Paneli */}
 
       <div className="absolute top-24 left-4 z-[1000] bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-4 w-64 border border-transparent dark:border-gray-700 transition-colors duration-300">
 
         <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 transition-colors duration-300">
-          Harita Görünümü
+          Harita Gorunumu
         </h3>
 
         <div className="flex bg-gray-100 dark:bg-gray-900 rounded-xl p-1 mb-4 transition-colors duration-300">
@@ -718,12 +809,12 @@ export default function Map({ onRegionSelect, isDarkMode }) {
 
         </div>
 
-        {/* YOĞUNLUK */}
+        {/* YOGUNLUK */}
 
         <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
 
           <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-2">
-            Yoğunluk
+            Yogunluk
           </p>
 
           <div className="flex items-center gap-1">
@@ -737,7 +828,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
             />
 
             <span className="text-[11px] text-gray-500 mr-2">
-              Düşük
+              Dusuk
             </span>
 
             <span
@@ -749,7 +840,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
             />
 
             <span className="text-[11px] text-gray-500">
-              Yüksek
+              Yuksek
             </span>
 
           </div>

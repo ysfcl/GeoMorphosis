@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sun, Moon, Send, Info, Bell, Mail, Monitor, X } from 'lucide-react';
 import Map from '@/components/Map';
@@ -107,6 +107,19 @@ export default function Home() {
     }, POLL_INTERVAL_MS);
   };
 
+  // useCallback ile sabitliyoruz: aksi halde her render'da yeni bir
+  // fonksiyon referansi olusur, Map component'indeki harita baslatma
+  // useEffect'i buna bagimli oldugu icin harita surekli silinip yeniden
+  // kurulur (cizilen sekil ve isi haritasi katmanlari kaybolur).
+  const handleRegionSelect = useCallback((region) => {
+    setSelectedRegion(region);
+    // Yeni bir bolge cizildiginde onceki analiz sonucu artik gecersiz;
+    // isi haritasinin eski bolgenin verisini gostermeye devam etmemesi
+    // icin temizliyoruz.
+    setAnalysisResult(null);
+    setTaskId(null);
+  }, []);
+
   const handleAnalyze = async () => {
     if (!selectedRegion || loading) return;
     const coordinates = resolveCoordinates(selectedRegion);
@@ -183,7 +196,12 @@ export default function Home() {
   return (
     <main className="fixed inset-0 overflow-hidden bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
       <div className="absolute inset-0 z-0">
-        <Map onRegionSelect={setSelectedRegion} isDarkMode={isDarkMode} />
+        <Map
+          onRegionSelect={handleRegionSelect}
+          isDarkMode={isDarkMode}
+          selectedRegion={selectedRegion}
+          analysisResult={analysisResult}
+        />
       </div>
 
       <nav className="absolute top-0 left-0 right-0 z-[1000] h-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md shadow-sm border-b border-gray-200 dark:border-gray-800 transition-colors duration-300">
