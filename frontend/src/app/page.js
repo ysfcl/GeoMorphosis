@@ -188,13 +188,15 @@ export default function Home() {
 
       <nav className="absolute top-0 left-0 right-0 z-[1000] h-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md shadow-sm border-b border-gray-200 dark:border-gray-800 transition-colors duration-300">
         <div className="h-full px-8 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-md">{/*<span className="text-white text-2xl font-bold">G</span>*/}<img src="logo.png" alt="Logo" className="w-full h-full object-contain" /></div>
+          <a href="/" className="flex items-center gap-4 group cursor-pointer decoration-transparent">
+            <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg transition-transform duration-300 ease-out group-hover:scale-110 group-hover:-rotate-3 group-active:scale-95">
+              <img src="logo.png" alt="Logo" className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" />
+            </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">GeoMorphosis</h1>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">GeoMorphosis</h1>
               <p className="text-lg text-gray-500 dark:text-gray-400 hidden sm:block">Çevresel İzleme Platformu</p>
             </div>
-          </div>
+          </a>
 
           <div className="flex items-center gap-3 md:gap-4">
             <p className="text-xl text-gray-500 dark:text-gray-400 hidden lg:block pr-4">Uydu Analiz Sistemi</p>
