@@ -399,8 +399,8 @@ export default function Home() {
             <h3 className="font-bold text-green-700 dark:text-green-400 text-lg">✓ Analiz tamamlandı</h3>
             <div className="mt-3 space-y-2 text-gray-700 dark:text-gray-200">
               <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">NDVI skoru</span><span className="font-semibold">{analysisResult.ndvi_score}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Ormansızlaşma</span><span className="font-semibold">{RISK_LABELS[analysisResult.deforestation_risk] ?? '-'}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Kirlilik</span><span className="font-semibold">{RISK_LABELS[analysisResult.pollution_level] ?? '-'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Ormansızlaşma</span><span className="font-semibold">{RISK_LABELS[analysisResult.deforestation_risk] ?? '-'}{(typeof analysisResult.deforestation_loss_percent === 'number' && analysisResult.deforestation_loss_percent > 0) ? ` (%${analysisResult.deforestation_loss_percent.toFixed(2)})` : ((analysisResult.deforestation_detections || 0) > 0 ? ` (${analysisResult.deforestation_detections} tespit)` : '')}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Kirlilik</span><span className="font-semibold">{RISK_LABELS[analysisResult.pollution_level] ?? '-'}{typeof analysisResult.pollution_aod === 'number' ? ` (AOD ${analysisResult.pollution_aod.toFixed(2)})` : ''}</span></div>
             </div>
           </div>
         </div>

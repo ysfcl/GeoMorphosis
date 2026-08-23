@@ -88,16 +88,17 @@ def _max_risk(*levels: str) -> str:
 def _pollution_score_from_aod(aod):
     """MODIS AOD degerini 0-1 araligi kirlilik skoruna cevirir.
 
-    Esikler ekip arkadasinin orijinal implementasyonundan aynen alindi;
-    uretimdeki degerlerle geriye donuk uyumluluk icin degistirilmedi.
+    Esikler Anadolu yaz arka planina gore kalibre edildi: toz tasmasi
+    doneminde bolgesel medyan AOD 0.3-0.5 civari normaldir; eski esiklerle
+    (0.1/0.2/0.4) Turkiye'nin her bolgesi "yuksek" cikiyordu.
     """
     if aod is None:
         return None
-    if aod <= 0.1:
+    if aod <= 0.15:
         return 0.1
-    if aod <= 0.2:
+    if aod <= 0.30:
         return 0.3
-    if aod <= 0.4:
+    if aod <= 0.50:
         return 0.6
     return 0.9
 
@@ -253,7 +254,8 @@ def analyze_region(
 
     # Kirlilik iki kaynagin birlesimi: YOLO tespiti (nadir) + MODIS AOD
     # (merge oncesi ana kaynak). Ikisi de "yok" ise deterministik fallback.
-    pollution_aod_score = _pollution_score_from_aod(get_modis_aod(lat, lon))
+    pollution_aod = get_modis_aod(lat, lon)
+    pollution_aod_score = _pollution_score_from_aod(pollution_aod)
     if pollution_aod_score is None:
         pollution_aod_score = _fallback_pollution_score(lat, lon)
     pollution_level = _max_risk(
@@ -269,7 +271,20 @@ def analyze_region(
         "coordinates": {"lat": lat, "lon": lon, "buffer_meters": buffer_meters},
         "ndvi_score": ndvi_t2_mean,
         "deforestation_risk": deforestation_risk,
+        # Panelde etiketin yaninda yuzde gostermek icin (orn. "yok %0.8")
+        "deforestation_loss_percent": float(
+            ai_results_dict["change_detection"]["deforestation"]["loss_percentage"]
+        ),
+        # Risk seviyesi NDVI kaybindan degil model tespitlerinden geliyorsa
+        # panel bunu acikca gosterebilsin diye tespit sayisi
+        "deforestation_detections": sum(
+            1
+            for item in detections
+            if str(item.get("class", "")) == "deforestation"
+        ),
         "pollution_level": pollution_level,
+        # Kalibrasyon seffafligi: seviyenin geldigi ham AOD degeri (None olabilir)
+        "pollution_aod": pollution_aod,
         # --- Durum bayraklari ---
         "demo_mode": demo_mode,
         "model_loaded": model_loaded,

@@ -89,6 +89,10 @@ def test_analyze_region_returns_full_contract_in_demo_mode(monkeypatch):
     assert result["deforestation_risk"] == "yok"
     # AOD erisilemezse deterministik fallback devrede (0.05-0.35 bandi)
     assert result["pollution_level"] in ("yok", "dusuk")
+    # Panel yuzde + ham AOD gosterebilmeli; alanlar her zaman mevcut
+    assert isinstance(result["deforestation_loss_percent"], float)
+    assert isinstance(result["deforestation_detections"], int)
+    assert result["pollution_aod"] is None or isinstance(result["pollution_aod"], float)
     assert result["status"]
     assert result["timestamp"]
     assert "yolo_detections" in result["ai_results"]
@@ -285,9 +289,9 @@ def test_pollution_score_from_aod_thresholds():
 
     assert _pollution_score_from_aod(None) is None
     assert _pollution_score_from_aod(0.05) == 0.1
-    assert _pollution_score_from_aod(0.15) == 0.3
-    assert _pollution_score_from_aod(0.3) == 0.6
-    assert _pollution_score_from_aod(0.5) == 0.9
+    assert _pollution_score_from_aod(0.2) == 0.3
+    assert _pollution_score_from_aod(0.4) == 0.6
+    assert _pollution_score_from_aod(0.6) == 0.9
 
 
 def test_score_to_risk_mapping():

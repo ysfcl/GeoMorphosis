@@ -164,13 +164,35 @@ export default function Analytics({ data }) {
   const changeDetection = data?.ai_results?.change_detection ?? {};
   const deforestationInfo = changeDetection.deforestation ?? {};
 
+  // NDVI tabanli gercek kayip yuzdesi (<%1 ise backend detected=false gonderir)
   const deforestationLossPercent = deforestationInfo.detected
     ? Math.min(100, Math.max(0, Number(deforestationInfo.loss_percentage) || 0))
     : 0;
+  // Risk seviyesi YOLO tespitlerinden de gelebiliyor; kaynak tespiti icin sayi
+  const deforestationDetections = Number(data?.deforestation_detections) || 0;
   const pollutionImpactPercent = RISK_PERCENT[currentPollution] ?? 0;
 
+  // Kart/bar/donut ucunun ayni rakami gormesi icin tek kaynak:
+  // seviye 'yok' ise gercek NDVI yuzdesi, degilse modellenen seviye payi
+  // ile NDVI yuzdesinin buyuk olani kullanilir.
+  const deforestationShare =
+    currentDeforestation === 'yok'
+      ? deforestationLossPercent
+      : Math.max(deforestationLossPercent, RISK_PERCENT[currentDeforestation] ?? 0);
+
+  // Ormansızlaşma kartının alt yazisi: once gercek kayip, kayip yoksa tespit
+  // kaynagi aciklanir ("Orta ama %0" celiskisi boylece ortadan kalkar).
+  let deforestationSublabel;
+  if (deforestationLossPercent > 0) {
+    deforestationSublabel = `Bitki örtüsü kaybı: %${deforestationLossPercent}`;
+  } else if (deforestationDetections > 0) {
+    deforestationSublabel = `YOLO tespiti: ${deforestationDetections} bölge`;
+  } else {
+    deforestationSublabel = 'Belirgin bitki örtüsü kaybı yok';
+  }
+
   const aiData = [
-    { ad: 'Ormansızlaşma', deger: Math.round(deforestationLossPercent), fill: ACCENT.deforestation },
+    { ad: 'Ormansızlaşma', deger: Math.round(deforestationShare), fill: ACCENT.deforestation },
     { ad: 'Kirlilik', deger: Math.round(pollutionImpactPercent), fill: ACCENT.pollution },
   ].filter((item) => item.deger > 0);
 
@@ -228,7 +250,7 @@ export default function Analytics({ data }) {
             {RISK_LABELS[currentDeforestation]}
           </h2>
           <p className="mt-4 text-sm opacity-80 tabular-nums">
-            Bitki örtüsü kaybı: %{deforestationLossPercent}
+            {deforestationSublabel}
           </p>
         </div>
 
@@ -399,7 +421,7 @@ export default function Analytics({ data }) {
           </div>
           <RiskBar percent={RISK_PERCENT[currentDeforestation]} accent={ACCENT.deforestation} />
           <p className="text-xs text-[#9CA3AF] mt-3 tabular-nums">
-            Tespit edilen bitki örtüsü kaybı: %{deforestationLossPercent}
+            {deforestationSublabel}
           </p>
         </div>
 
