@@ -1,0 +1,8 @@
+Roboto
+Copyright 2011 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0
+https://www.apache.org/licenses/LICENSE-2.0
+
+PDF raporundaki Turkce karakterler (i, g, s, c) icin gomulu font.
+jsPDF'in varsayilan fontlari WinAnsi kodlamasi kullandigi icin
+i, g, s karakterlerini gosteremiyor.

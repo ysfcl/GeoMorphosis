@@ -275,3 +275,128 @@ def test_change_map_is_null_when_rendering_fails(monkeypatch, tmp_path):
     images = analysis_service.analyze_region(36.853, 28.2715)["images"]
 
     assert images["change_map"] is None
+
+
+# --- kirlilik kaplama yuzdesi ---
+
+def _box(class_name, bbox, confidence=0.9):
+    return {"class": class_name, "confidence": confidence, "bbox": bbox}
+
+
+def test_coverage_is_zero_without_detections():
+    assert analysis_service._detection_coverage_percentage([], "pollution", 512) == 0.0
+
+
+def test_coverage_measures_the_box_area():
+    """256x256 kutu, 512x512 goruntunun dortte birini kaplar."""
+    detections = [_box("pollution", [0, 0, 256, 256])]
+
+    assert analysis_service._detection_coverage_percentage(
+        detections, "pollution", 512
+    ) == 25.0
+
+
+def test_overlapping_boxes_are_counted_once():
+    """Kutu alanlari toplansaydi %50 cikardi; maske sayesinde %25 kaliyor."""
+    detections = [
+        _box("pollution", [0, 0, 256, 256]),
+        _box("pollution", [0, 0, 256, 256]),
+    ]
+
+    assert analysis_service._detection_coverage_percentage(
+        detections, "pollution", 512
+    ) == 25.0
+
+
+def test_coverage_only_counts_the_requested_class():
+    detections = [
+        _box("pollution", [0, 0, 256, 256]),
+        _box("fire", [256, 256, 512, 512]),
+    ]
+
+    assert analysis_service._detection_coverage_percentage(
+        detections, "pollution", 512
+    ) == 25.0
+
+
+def test_boxes_outside_the_frame_are_clipped():
+    """Tasmis kutu %100'u asmamali."""
+    detections = [_box("pollution", [-200, -200, 900, 900])]
+
+    assert analysis_service._detection_coverage_percentage(
+        detections, "pollution", 512
+    ) == 100.0
+
+
+def test_malformed_boxes_are_skipped():
+    detections = [_box("pollution", [1, 2]), _box("pollution", [10, 10, 10, 10])]
+
+    assert analysis_service._detection_coverage_percentage(
+        detections, "pollution", 512
+    ) == 0.0
+
+
+def test_pollution_block_reports_measurements(monkeypatch, tmp_path):
+    rgb, ndvi = tmp_path / "rgb.png", tmp_path / "ndvi.png"
+    rgb.write_bytes(b"x")
+    ndvi.write_bytes(b"x")
+
+    monkeypatch.setattr(
+        analysis_service,
+        "download_satellite_series",
+        lambda **kwargs: [
+            {
+                "year": 2025,
+                "status": "ok",
+                "path": str(rgb),
+                "image_path": str(rgb),
+                "rgb_path": str(rgb),
+                "ndvi_path": str(ndvi),
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        analysis_service.YoloService,
+        "predict",
+        classmethod(
+            lambda cls, path: {
+                "boxes": [
+                    {"class": "pollution", "class_id": 1, "confidence": 0.64, "bbox": [0, 0, 256, 256]},
+                ],
+                "model_loaded": True,
+            }
+        ),
+    )
+    monkeypatch.setattr(analysis_service, "_safe_ndvi", lambda path: None)
+
+    result = analysis_service.analyze_region(36.853, 28.2715)
+
+    assert result["pollution_percentage"] == 25.0
+    assert result["ai_results"]["pollution"] == {
+        "detected": True,
+        "coverage_percentage": 25.0,
+        "detection_count": 1,
+        "max_confidence": 0.64,
+    }
+
+
+def test_pollution_percentage_is_zero_in_demo_mode(monkeypatch):
+    monkeypatch.setattr(
+        analysis_service,
+        "download_satellite_series",
+        lambda **kwargs: [
+            {
+                "year": 2025,
+                "status": "demo",
+                "path": None,
+                "image_path": None,
+                "rgb_path": None,
+                "ndvi_path": None,
+            }
+        ],
+    )
+
+    result = analysis_service.analyze_region(36.853, 28.2715)
+
+    assert result["pollution_percentage"] == 0.0
+    assert result["ai_results"]["pollution"]["detected"] is False
