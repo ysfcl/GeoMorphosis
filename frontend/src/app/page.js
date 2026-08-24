@@ -11,6 +11,15 @@ import { saveLastReport, loadLastReport } from '@/lib/reportPayload';
 
 const POLL_INTERVAL_MS = 3000;
 
+// Analiz ozet kartindaki risk seviyeleri icin Turkce etiketler
+const RISK_LABELS = {
+  yok: 'Yok',
+  normal: 'Normal',
+  dusuk: 'Düşük',
+  orta: 'Orta',
+  yuksek: 'Yüksek',
+};
+
 function resolveCoordinates(region) {
   if (!region) return null;
 
