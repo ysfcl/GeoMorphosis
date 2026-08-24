@@ -47,7 +47,7 @@ export default function Toast({ type = 'info', title, message, onClose, autoClos
   const style = types[type] || types.info;
 
   return (
-    <div className={`fixed bottom-6 right-6 z-[9999] flex items-start gap-4 p-5 rounded-2xl border shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-8 fade-in duration-300 w-full max-w-sm ${style.bg} ${style.border}`}>
+    <div className={`fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-[9999] flex items-start gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl border shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-8 fade-in duration-300 w-auto sm:w-full max-w-sm ${style.bg} ${style.border}`}>
       <div className="flex-shrink-0 mt-0.5">
         {style.icon}
       </div>

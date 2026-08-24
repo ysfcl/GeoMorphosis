@@ -157,10 +157,10 @@ export default function Analytics({ data }) {
   const currentPollution = normalizeRisk(data.pollution_level);
   const currentDeforestation = normalizeRisk(data.deforestation_risk);
 
-  // --- Tespit dagilimi GERCEK backend verisinden uretilir ---
-  // Ormansızlaşma payı: change_detection.deforestation.loss_percentage
-  // (detected=false ise 0 sayılır). Kirlilik payı: risk seviyesi 'yok' iken
-  // 0'dır; boylece ustteki kartlarla alttaki yuzdeler asla celismez.
+  // --- Tespit dagilimi GERCEK olcumlerden üretilir ---
+  // Kart metni, bar alt yazisi ve donut ayni rakami görmeli; seviye
+  // tablosundan türetilen sentetik paylar (%58 gibi) gerçek ölçümle
+  // (%11.07 kayıp) çeliştiği için kaldırıldı.
   const changeDetection = data?.ai_results?.change_detection ?? {};
   const deforestationInfo = changeDetection.deforestation ?? {};
 
@@ -170,15 +170,20 @@ export default function Analytics({ data }) {
     : 0;
   // Risk seviyesi YOLO tespitlerinden de gelebiliyor; kaynak tespiti icin sayi
   const deforestationDetections = Number(data?.deforestation_detections) || 0;
-  const pollutionImpactPercent = RISK_PERCENT[currentPollution] ?? 0;
 
-  // Kart/bar/donut ucunun ayni rakami gormesi icin tek kaynak:
-  // seviye 'yok' ise gercek NDVI yuzdesi, degilse modellenen seviye payi
-  // ile NDVI yuzdesinin buyuk olani kullanilir.
-  const deforestationShare =
-    currentDeforestation === 'yok'
-      ? deforestationLossPercent
-      : Math.max(deforestationLossPercent, RISK_PERCENT[currentDeforestation] ?? 0);
+  // Kirlilik payı doğrudan MODIS AOD ölçümünden türetilir; 0.60 tam ölçek
+  // kabul edilir ('yüksek' eşiği 0.50'nin üzerinde güvenli referans).
+  // AOD yoksa seviye tablosuna düşülür (demo modu geri uyumu).
+  const pollutionAod = Number(data?.pollution_aod);
+  const POLLUTION_FULL_SCALE_AOD = 0.6;
+  const pollutionImpactPercent = currentPollution === 'yok'
+    ? 0
+    : Number.isFinite(pollutionAod) && pollutionAod > 0
+      ? Math.min(100, Math.round((pollutionAod / POLLUTION_FULL_SCALE_AOD) * 100))
+      : RISK_PERCENT[currentPollution] ?? 0;
+
+  // Donutta sentetik seviye payı değil, gerçek NDVI ölçümü kullanılır
+  const deforestationShare = deforestationLossPercent;
 
   // Ormansızlaşma kartının alt yazisi: once gercek kayip, kayip yoksa tespit
   // kaynagi aciklanir ("Orta ama %0" celiskisi boylece ortadan kalkar).
@@ -189,6 +194,17 @@ export default function Analytics({ data }) {
     deforestationSublabel = `YOLO tespiti: ${deforestationDetections} bölge`;
   } else {
     deforestationSublabel = 'Belirgin bitki örtüsü kaybı yok';
+  }
+
+  // Kirlilik kartının/bar alt yazısı: gerçek AOD değeri + türetilmiş etki yüzdesi
+  // (ormansızlaşma kartıyla simetrik görünsün diye eklendi)
+  let pollutionSublabel;
+  if (Number.isFinite(pollutionAod) && pollutionAod > 0) {
+    pollutionSublabel = `MODIS AOD: ${pollutionAod.toFixed(2)} · etkisi %${pollutionImpactPercent}`;
+  } else {
+    pollutionSublabel = currentPollution === 'yok'
+      ? 'Belirgin kirlilik etkisi yok'
+      : 'AOD ölçümü alınamadı';
   }
 
   const aiData = [
@@ -435,6 +451,9 @@ export default function Analytics({ data }) {
             </span>
           </div>
           <RiskBar percent={RISK_PERCENT[currentPollution]} accent={ACCENT.pollution} />
+          <p className="text-xs text-[#9CA3AF] mt-3 tabular-nums">
+            {pollutionSublabel}
+          </p>
         </div>
       </div>
 
@@ -516,7 +535,7 @@ export default function Analytics({ data }) {
         <p className="text-[11px] text-[#9CA3AF] mt-8 pt-4 border-t border-[#F0F1F3]">
           Analiz tarihi:{' '}
           {data.timestamp ? new Date(data.timestamp).toLocaleString('tr-TR') : '—'} · Bu
-          oranlar NDVI değişim analizi (bitki örtüsü kaybı) ve kirlilik risk modeline
+          oranlar NDVI değişim analizi (bitki örtüsü kaybı) ve MODIS AOD ölçümüne
           dayanmaktadır.
         </p>
       </div>
