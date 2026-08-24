@@ -526,4 +526,4 @@ export default function Analytics({ data }) {
       </div>
     </div>
   );
-}s
+}
