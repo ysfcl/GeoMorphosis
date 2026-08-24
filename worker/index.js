@@ -1,5 +1,6 @@
 const { createClient } = require('redis');
 const notifier = require('./services/notifier');
+const { startTelegramPolling } = require('./services/telegramPoller');
 
 // Docker-compose üzerinden gelen Redis adresini alıyoruz
 const redisHost = process.env.REDIS_HOST || 'localhost';
@@ -67,20 +68,26 @@ function buildAlertText(taskId, result) {
     ].join('\n');
 }
 
-async function sendAnalysisEmailToSubscriber(userId, result) {
-    if (!userId) return false;
-
-    const report = {
+function buildSubscriberReport(result) {
+    return {
         lat: result?.coordinates?.lat,
-        lng: result?.coordinates?.lon,
+        lon: result?.coordinates?.lon,
         riskLevel: result?.fire_risk || 'normal',
         summary: result?.demo_mode
             ? 'Uydu verisi alınamadığı için demo değerleri gösterildi.'
             : 'Bölge analizi tamamlandı, detaylar panelde görüntülenebilir.',
+        timestamp: new Date().toISOString(),
     };
+}
+
+// E-posta ve Telegram ayni sozlesmeyi kullaniyor; tek fark rota adi.
+async function notifySubscriber(channel, userId, result) {
+    if (!userId) return false;
+
+    const report = buildSubscriberReport(result);
 
     try {
-        const response = await fetch(`${frontendUrl}/api/notify/email/subscriber`, {
+        const response = await fetch(`${frontendUrl}/api/notify/${channel}/subscriber`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -92,14 +99,21 @@ async function sendAnalysisEmailToSubscriber(userId, result) {
         });
 
         if (!response.ok) {
-            console.error(`[MUTFAK] Abone e-postası gönderilemedi: HTTP ${response.status}`);
+            console.error(`[MUTFAK] Abone bildirimi gönderilemedi (${channel}): HTTP ${response.status}`);
             return false;
         }
 
         const payload = await response.json();
+
+        if (payload.success !== true) {
+            // Rota 200 donuyor ama gonderim basarisiz olabilir (abone yok,
+            // chat bulunamadi, token reddedildi...). Sebep frontend logunda.
+            console.warn(`[MUTFAK] ${channel} bildirimi gonderilemedi; sebep icin frontend loguna bakin.`);
+        }
+
         return payload.success === true;
     } catch (error) {
-        console.error('[MUTFAK] Abone e-postası servisine ulaşılamadı:', error);
+        console.error(`[MUTFAK] Bildirim servisine ulaşılamadı (${channel}):`, error);
         return false;
     }
 }
@@ -158,7 +172,18 @@ async function processTask(taskId) {
             `${result.demo_mode ? ' (demo modu)' : ''}`
         );
 
-        await sendAnalysisEmailToSubscriber(payload.user_id, result);
+        // Iki kanal da burada tetikleniyor: sunucu tarafinda, analiz basina bir kez.
+        const [emailSent, telegramSent] = await Promise.all([
+            notifySubscriber('email', payload.user_id, result),
+            notifySubscriber('telegram', payload.user_id, result),
+        ]);
+
+        if (payload.user_id) {
+            console.log(
+                `[MUTFAK] Abone bildirimi: e-posta=${emailSent ? 'gonderildi' : 'atlandi'} ` +
+                `telegram=${telegramSent ? 'gonderildi' : 'atlandi'}`
+            );
+        }
 
         // 5. Erken uyarı bildirimi
         if (shouldAlert(result)) {
@@ -184,6 +209,13 @@ async function startWorker() {
     console.log('Geomorphosis Worker (Mutfak) Redis\'e bağlandı. Yeni analiz görevleri bekleniyor...');
     console.log(`AI Engine adresi: ${aiEngineUrl}`);
 
+    // Telegram dinleyicisi kuyruk tuketicisiyle birlikte calisir.
+    // Sonsuz dongu oldugu icin BILEREK await edilmiyor; aksi halde asagidaki
+    // kuyruk dongusune hic sira gelmezdi.
+    startTelegramPolling({ redisClient }).catch((error) => {
+        console.error('[TELEGRAM] Dinleyici baslatilamadi:', error.message);
+    });
+
     // Kuyruğu dinleyen sonsuz döngü
     while (true) {
         try {
@@ -206,4 +238,11 @@ if (require.main === module) {
     startWorker();
 }
 
-module.exports = { processTask, extractCoordinates, shouldAlert, sendAnalysisEmailToSubscriber, startWorker };
+module.exports = {
+    processTask,
+    extractCoordinates,
+    shouldAlert,
+    buildSubscriberReport,
+    notifySubscriber,
+    startWorker,
+};

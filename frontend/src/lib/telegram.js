@@ -6,9 +6,8 @@ const TELEGRAM_API = 'https://api.telegram.org';
  * /api/analyze) @prisma/adapter-better-sqlite3'e ve DATABASE_URL'e bagimli
  * hale getiriyordu; `next build` bu yuzden kiriliyordu.
  */
-async function getPrisma() {
-  const mod = await import('@/lib/prisma');
-  return mod.default;
+async function subscriptions() {
+  return import('@/lib/telegram-subscriptions');
 }
 
 async function postMessage(token, chatId, message, title) {
@@ -22,6 +21,16 @@ async function postMessage(token, chatId, message, title) {
         parse_mode: 'HTML',
       }),
     });
+
+    if (!response.ok) {
+      // Telegram hata sebebini govdede aciklikla soyluyor ("chat not found",
+      // "bot was blocked by the user" gibi). Yutulursa "gonderilmedi" ile
+      // "abone yok" birbirinden ayirt edilemiyor.
+      const detail = await response.json().catch(() => ({}));
+      console.error(
+        `Telegram gönderimi başarısız (HTTP ${response.status}): ${detail.description ?? 'sebep bilinmiyor'}`
+      );
+    }
 
     return response.ok;
   } catch (error) {
@@ -56,19 +65,16 @@ export async function sendSystemTelegramNotification(message, title = 'Sistem Bi
 }
 
 /**
- * Kullanici kimliginden (regions_analysis.user_id) chat id'yi cozup bildirim gonderir.
- * Telegram webhook'u /start ile eslestirdigi chat id'yi bu tabloya yaziyor.
+ * Kullanici kimliginden chat id'yi cozup bildirim gonderir.
+ * Kayit e-posta ile ayni tabloda (notification_channels) tutuluyor.
  */
 export async function sendTelegramNotificationToUser(userId, message, title = 'Sistem Bildirimi') {
   try {
-    const prisma = await getPrisma();
-    const user = await prisma.regions_analysis.findUnique({
-      where: { user_id: userId },
-      select: { telegram_chat_id: true },
-    });
+    const { getActiveTelegramSubscription } = await subscriptions();
+    const channel = await getActiveTelegramSubscription(userId);
 
-    if (user?.telegram_chat_id) {
-      return sendTelegramNotification(user.telegram_chat_id, message, title);
+    if (channel?.destination) {
+      return sendTelegramNotification(channel.destination, message, title);
     }
 
     console.warn('Kullanicinin Telegram hesabi eslestirilmemis, bildirim atlanıyor.');
@@ -81,22 +87,11 @@ export async function sendTelegramNotificationToUser(userId, message, title = 'S
 
 export async function linkTelegramAccount(userId, chatId) {
   try {
-    const prisma = await getPrisma();
-    const updatedUser = await prisma.regions_analysis.upsert({
-      where: {
-        user_id: userId,
-      },
-      update: {
-        telegram_chat_id: String(chatId),
-      },
-      create: {
-        user_id: userId,
-        telegram_chat_id: String(chatId),
-      },
-    });
+    const { saveTelegramSubscription } = await subscriptions();
+    const channel = await saveTelegramSubscription(userId, chatId);
 
-    console.log('Telegram hesabı eşleştirildi:', updatedUser);
-    return updatedUser;
+    console.log('Telegram hesabı eşleştirildi:', channel);
+    return channel;
   } catch (error) {
     console.error('Telegram hesabı eşleştirme hatası:', error);
     return null;
@@ -138,13 +133,10 @@ export async function sendAnalysisReportToUser(userId, reportData) {
   }
 
   try {
-    const prisma = await getPrisma();
-    const user = await prisma.regions_analysis.findUnique({
-      where: { user_id: userId },
-      select: { telegram_chat_id: true },
-    });
+    const { getActiveTelegramSubscription } = await subscriptions();
+    const channel = await getActiveTelegramSubscription(userId);
 
-    if (!user?.telegram_chat_id) {
+    if (!channel?.destination) {
       console.warn(`Kullanıcının (${userId}) Telegram hesabı bağlı değil, rapor atlanıyor.`);
       return false;
     }
@@ -156,7 +148,7 @@ export async function sendAnalysisReportToUser(userId, reportData) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: user.telegram_chat_id,
+        chat_id: channel.destination,
         text,
         parse_mode: 'HTML',
         reply_markup: {
@@ -164,6 +156,13 @@ export async function sendAnalysisReportToUser(userId, reportData) {
         },
       }),
     });
+
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      console.error(
+        `Analiz raporu gönderilemedi (HTTP ${response.status}): ${detail.description ?? 'sebep bilinmiyor'}`
+      );
+    }
 
     return response.ok;
   } catch (error) {

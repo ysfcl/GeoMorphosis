@@ -29,24 +29,40 @@ function withMockedFetch(mockImplementation, callback) {
 test('subscribe route accepts a valid subscription payload', async () => {
   // Abonelik artik Prisma uzerinden yaziliyor; testlerde @/lib/prisma
   // tests/stubs/prisma.js ile karsilanir, gercek veritabanina dokunulmaz.
-  const response = await subscribePOST(
-    createJsonRequest({
+  //
+  // SMTP ayarlari BILEREK bosaltiliyor. Aksi halde test ortam degiskenlerine
+  // bagimli hale geliyor: .env'de gercek SMTP varsa route kodu devCode olarak
+  // dondurmek yerine gercekten e-posta gondermeye calisiyor, test hem kiriliyor
+  // hem de sahte adrese posta atmaya ugrasiyor.
+  const smtpKeys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS'];
+  const savedSmtp = Object.fromEntries(smtpKeys.map((key) => [key, process.env[key]]));
+  smtpKeys.forEach((key) => delete process.env[key]);
+
+  try {
+    const response = await subscribePOST(
+      createJsonRequest({
+        email: 'qa@example.com',
+        user_id: 'qa-user-42',
+        notification_type: 'email',
+      })
+    );
+
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.equal(payload.success, true);
+    assert.deepEqual(payload.subscription, {
       email: 'qa@example.com',
-      user_id: 'qa-user-42',
       notification_type: 'email',
-    })
-  );
-
-  assert.equal(response.status, 200);
-
-  const payload = await response.json();
-  assert.equal(payload.success, true);
-  assert.deepEqual(payload.subscription, {
-    email: 'qa@example.com',
-    notification_type: 'email',
-  });
-  // SMTP yapilandirilmadigindan dogrulama kodu devCode olarak doner.
-  assert.match(payload.devCode, /^\d{6}$/);
+    });
+    // SMTP yapilandirilmadigindan dogrulama kodu devCode olarak doner.
+    assert.match(payload.devCode, /^\d{6}$/);
+  } finally {
+    smtpKeys.forEach((key) => {
+      if (savedSmtp[key] === undefined) delete process.env[key];
+      else process.env[key] = savedSmtp[key];
+    });
+  }
 });
 
 test('email verify route confirms the matching code', async () => {
@@ -168,7 +184,7 @@ test('analyze route forwards the regional payload to the AI engine and returns t
   }
 });
 
-test('analyze polling route returns the final task status and notifies on completion', async () => {
+test('analyze polling route returns the final task status without notifying', async () => {
   const originalToken = process.env.TELEGRAM_BOT_TOKEN;
   const originalChatId = process.env.TELEGRAM_CHAT_ID;
   const originalAiEngineUrl = process.env.NEXT_PUBLIC_AI_ENGINE_URL;
@@ -208,7 +224,10 @@ test('analyze polling route returns the final task status and notifies on comple
     assert.equal(payload.status, 'completed');
     assert.equal(payload.result.deforestation_risk, 'orta');
     assert.equal(calls.filter((entry) => entry.includes('/api/status/task-456')).length, 1);
-    assert.equal(calls.filter((entry) => entry.includes('api.telegram.org')).length, 1);
+    // Abone bildirimi artik polling'den degil worker'dan gidiyor: 'completed'
+    // durumu birden fazla kez sorgulanabildigi icin buradan gonderim mukerrer
+    // mesaj uretiyordu. Ayrintili testler tests/notification-routing.test.js'te.
+    assert.equal(calls.filter((entry) => entry.includes('api.telegram.org')).length, 0);
   });
 
   if (originalAiEngineUrl === undefined) {

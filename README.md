@@ -109,6 +109,33 @@ cp .env.example .env
 docker-compose up --build
 ```
 
+## Veritabani kurulumu (ilk calistirmada sart)
+
+Bildirim kanallari (e-posta ve Telegram abonelikleri) `notification_channels`
+tablosunda tutulur. Bu tablo Prisma migration'i ile geliyor ve **otomatik
+uygulanmiyor**; uygulanmazsa bildirimler sessizce basarisiz olur, arayuzde
+hicbir hata gorunmez.
+
+```bash
+docker compose exec web-client npx prisma migrate deploy
+```
+
+`P3005: The database schema is not empty` hatasi alirsaniz sebebi su: ai-engine
+kendi tablolarini (`regions_analysis`, `periodic_subscriptions`) ham SQL ile
+olusturuyor, dolayisiyla veritabani bos degil ama Prisma'nin migration gecmisi
+yok. Mevcut migration'lari uygulanmis olarak isaretleyin:
+
+```bash
+docker compose exec web-client npx prisma migrate resolve --applied 20260822171849_notification_channels
+```
+
+Sema degistiginde uretilmis Prisma istemcisi de yenilenmeli. `node_modules`
+anonim volume'da donduğu icin `restart` yetmez:
+
+```bash
+docker compose exec web-client npx prisma generate && docker compose restart web-client
+```
+
 ## Test etme
 
 ### ai-engine (Python)

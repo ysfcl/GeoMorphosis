@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { sendSystemTelegramNotification, sendAnalysisReportToUser } from '@/lib/telegram';
+import { sendSystemTelegramNotification } from '@/lib/telegram';
 
 export async function POST(request) {
   try {
@@ -78,10 +78,6 @@ export async function GET(request) {
 
   // task_id varsa Polling (Durum Sorgulama) işlemi yap
   const taskId = searchParams.get('task_id');
-  const userId = searchParams.get('user_id');
-  const reportLat = searchParams.get('lat');
-  // Standart anahtar lon; eski istemciler icin lng toleransı korunur.
-  const reportLon = searchParams.get('lon') ?? searchParams.get('lng');
 
   if (taskId) {
   try {
@@ -93,20 +89,12 @@ export async function GET(request) {
 
     const statusData = await response.json();
 
-    if (statusData.status === 'completed') {
-       const report = {
-         lat: reportLat,
-         lon: reportLon,
-         riskLevel: statusData.result?.deforestation_risk || 'normal',
-         summary: statusData.result?.demo_mode
-           ? 'Uydu verisi alınamadığı için demo değerleri gösterildi.'
-           : 'Bölge analizi tamamlandı, detaylar panelde görüntülenebilir.',
-         timestamp: new Date().toISOString(),
-       };
-
-       await sendAnalysisReportToUser(userId, report);
-    }
-
+    // Abone bildirimleri buradan GONDERILMIYOR. Polling her uc saniyede bir
+    // calistigi ve 'completed' durumu birden fazla kez sorgulanabildigi icin
+    // (ana sayfa tamamlandi gorup durur, ardindan detay sayfasi ayni task_id ile
+    // yeniden sorgular) her sorguda tekrar mesaj gidiyordu. Ustelik kullanici
+    // sekmeyi kapattiginda hic gitmiyordu. Gonderimi worker devraldi:
+    // analiz bitince sunucu tarafinda, analiz basina bir kez.
     return NextResponse.json(statusData);
   } catch (error) {
      return NextResponse.json({ error: 'Durum sorgulanamadı' }, { status: 500 });
