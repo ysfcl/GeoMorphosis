@@ -1,5 +1,6 @@
 const { createClient } = require('redis');
 const notifier = require('./services/notifier');
+const { startTelegramPolling } = require('./services/telegramPoller');
 
 // Docker-compose üzerinden gelen Redis adresini alıyoruz
 const redisHost = process.env.REDIS_HOST || 'localhost';
@@ -207,6 +208,13 @@ async function startWorker() {
     await redisClient.connect();
     console.log('Geomorphosis Worker (Mutfak) Redis\'e bağlandı. Yeni analiz görevleri bekleniyor...');
     console.log(`AI Engine adresi: ${aiEngineUrl}`);
+
+    // Telegram dinleyicisi kuyruk tuketicisiyle birlikte calisir.
+    // Sonsuz dongu oldugu icin BILEREK await edilmiyor; aksi halde asagidaki
+    // kuyruk dongusune hic sira gelmezdi.
+    startTelegramPolling({ redisClient }).catch((error) => {
+        console.error('[TELEGRAM] Dinleyici baslatilamadi:', error.message);
+    });
 
     // Kuyruğu dinleyen sonsuz döngü
     while (true) {
