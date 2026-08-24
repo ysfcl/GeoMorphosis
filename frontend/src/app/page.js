@@ -493,6 +493,15 @@ export default function Home() {
           </div>
         </div>
       )}
+      {loading && taskId && (
+        <div className="absolute bottom-8 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[1000]">
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-5">
+            <p className="text-blue-700 dark:text-blue-400 font-semibold animate-pulse">Yapay zekâ bölgeyi işliyor...</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 break-all">Fiş No: {taskId}</p>
+          </div>
+        </div>
+      )}
+
       {isAboutOpen && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200" onClick={() => setIsAboutOpen(false)}>
           <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
