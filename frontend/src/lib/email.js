@@ -78,9 +78,14 @@ export async function sendAnalysisEmailToUser(userId, report) {
       report.summary,
     ].join('\n');
 
-    return sendEmailNotification(subscription.email, message, 'GeoMorphosis Analiz Raporu');
+    return sendEmailNotification(subscription.destination, message, 'GeoMorphosis Analiz Raporu');
   } catch (error) {
     console.error('Analiz e-postası gönderme hatası:', error);
     return false;
   }
+}
+export async function sendVerificationCodeEmail(to, code) {
+  const title = 'GeoMorphosis E-Posta Doğrulama Kodu';
+  const message = `Doğrulama kodunuz: ${code}\nBu kod ile e-posta aboneliğinizi onaylayabilirsiniz.`;
+  return sendEmailNotification(to, message, title);
 }
