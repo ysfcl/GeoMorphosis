@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sun, Moon, Send, Info, Bell, Mail, Monitor, X } from 'lucide-react';
+import { Sun, Moon, Send, Info, Bell, Mail, Monitor, X, Satellite, Zap, BarChart3, FileText, MapPin, BrainCircuit, BellRing } from 'lucide-react';
 import Map from '@/components/Map';
 import Toast from '@/components/Toast';
 import { getUserId } from '@/lib/userId';
@@ -486,10 +486,91 @@ export default function Home() {
       )}
 
       {loading && taskId && (
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[1000] w-full max-w-md">
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[1000] w-[calc(100%-2rem)] max-w-md sm:w-full">
           <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-5">
             <p className="text-blue-700 dark:text-blue-400 font-semibold animate-pulse">Yapay zekâ bölgeyi işliyor...</p>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 break-all">Fiş No: {taskId}</p>
+          </div>
+        </div>
+      )}
+
+      {isAboutOpen && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200" onClick={() => setIsAboutOpen(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
+
+            {/* HERO */}
+            <div className="relative bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 p-6 sm:p-10 text-white overflow-hidden">
+              <div className="absolute -top-16 -right-16 w-48 h-48 bg-white/10 rounded-full blur-2xl" />
+              <button onClick={() => setIsAboutOpen(false)} className="absolute top-4 right-4 p-2 rounded-full bg-white/15 hover:bg-white/25 transition">
+                <X size={18} />
+              </button>
+              <span className="inline-block px-3 py-1 rounded-full bg-white/20 text-[11px] font-bold tracking-widest uppercase mb-4">
+                Girişim · v1.0
+              </span>
+              <h2 className="text-2xl sm:text-4xl font-extrabold leading-tight">
+                GeoMorphosis
+              </h2>
+              <p className="mt-3 text-base sm:text-xl font-medium text-emerald-50">
+                Uydular bizim gözümüz, yapay zekâ bizim beynimiz.
+              </p>
+              <p className="mt-2 text-sm text-emerald-100/90 max-w-lg">
+                Türkiye'nin yeşil alanlarını uzaydan izleyen, ormansızlaşmayı ve hava kirliliğini yapay zekâyle tespit edip anında haber veren çevresel izleme platformu.
+              </p>
+            </div>
+
+            <div className="p-5 sm:p-8 space-y-8">
+
+              {/* DEGERLER */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                {[
+                  { icon: Satellite, title: 'Uzaydan İzleme', desc: 'Sentinel-2 & Landsat arşiviyle her noktayı 3 farklı yılda karşılaştırıyoruz.', color: 'text-sky-500', bg: 'bg-sky-50 dark:bg-sky-900/30' },
+                  { icon: BrainCircuit, title: 'Yapay Zekâ Analizi', desc: 'YOLOv8 modeli uydu görüntülerindeki ormansızlaşma izlerini tespit ediyor.', color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/30' },
+                  { icon: BellRing, title: 'Anlık Erken Uyarı', desc: 'Risk anında e-posta ve Telegram üzerinden saniyeler içinde bildiriyoruz.', color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/30' },
+                  { icon: FileText, title: 'PDF Raporlama', desc: 'Her analiz, ekinde otomatik üretilmiş şık bir PDF raporuyla geliyor.', color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/30' },
+                ].map(({ icon: Icon, title, desc, color, bg }) => (
+                  <div key={title} className={`${bg} rounded-2xl p-4 flex gap-3`}>
+                    <Icon size={22} className={`${color} shrink-0 mt-0.5`} />
+                    <div>
+                      <h3 className="font-bold text-gray-800 dark:text-white text-sm">{title}</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-300 mt-1 leading-relaxed">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* NASIL CALISIR */}
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4">Nasıl Çalışır?</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { step: '1', icon: MapPin, label: 'Bölge seç' },
+                    { step: '2', icon: Satellite, label: 'Veri iner' },
+                    { step: '3', icon: Zap, label: 'AI analiz eder' },
+                    { step: '4', icon: BarChart3, label: 'Rapor al' },
+                  ].map(({ step, icon: Icon, label }) => (
+                    <div key={step} className="flex flex-col items-center text-center gap-2 bg-gray-50 dark:bg-gray-900 rounded-2xl p-4">
+                      <span className="w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-bold flex items-center justify-center">{step}</span>
+                      <Icon size={20} className="text-gray-400" />
+                      <span className="text-xs font-medium text-gray-700 dark:text-gray-200">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ALTYAPI */}
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-3">Altyapı</h3>
+                <div className="flex flex-wrap gap-2">
+                  {['Next.js', 'FastAPI', 'YOLOv8', 'Google Earth Engine', 'MODIS AOD', 'Redis', 'Prisma'].map(t => (
+                    <span key={t} className="px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-xs font-medium text-gray-600 dark:text-gray-200">{t}</span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-700 text-center text-xs text-gray-400">
+                MIT Lisansı ile açık kaynak · geomorphosis.com.tr
+              </div>
+            </div>
           </div>
         </div>
       )}

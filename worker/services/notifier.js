@@ -3,12 +3,17 @@ const nodemailer = require('nodemailer');
 // Kendi SMTP veya test sunucuna göre yapılandıracağın kısım
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.example.com',
-    port: process.env.SMTP_PORT || 587,
-    secure: false,
+    port: Number(process.env.SMTP_PORT) || 587,
+    // 465 = baglanti bastan TLS (secure:true), 587 = STARTTLS (secure:false)
+    secure: process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465',
     auth: {
         user: process.env.SMTP_USER || 'user',
         pass: process.env.SMTP_PASS || 'pass'
-    }
+    },
+    // Asili SMTP baglantilarinin worker'i kilitlememesi icin
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000
 });
 
 /**
