@@ -210,13 +210,13 @@ export default function Home() {
       </div>
 
       <nav className="absolute top-0 left-0 right-0 z-[1000] h-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md shadow-sm border-b border-gray-200 dark:border-gray-800 transition-colors duration-300">
-        <div className="h-full px-8 flex items-center justify-between">
-          <a href="/" className="flex items-center gap-4 group cursor-pointer decoration-transparent">
-            <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg transition-transform duration-300 ease-out group-hover:scale-110 group-hover:-rotate-3 group-active:scale-95">
+        <div className="h-full px-3 sm:px-6 md:px-8 flex items-center justify-between">
+          <a href="/" className="flex items-center gap-2 sm:gap-3 md:gap-4 group cursor-pointer decoration-transparent">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg transition-transform duration-300 ease-out group-hover:scale-110 group-hover:-rotate-3 group-active:scale-95">
               <img src="logo.png" alt="Logo" className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">GeoMorphosis</h1>
+              <h1 className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">GeoMorphosis</h1>
               <p className="text-lg text-gray-500 dark:text-gray-400 hidden sm:block">Çevresel İzleme Platformu</p>
             </div>
           </a>
@@ -252,7 +252,7 @@ export default function Home() {
 
             <button
               onClick={() => setPanelOpen((prev) => !prev)}
-              className="bg-gray-900 dark:bg-gray-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-black dark:hover:bg-gray-600 transition"
+              className="bg-gray-900 dark:bg-gray-700 text-white px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:bg-black dark:hover:bg-gray-600 transition"
             >
               {panelOpen ? 'Gizle' : 'Göster'}
             </button>
@@ -261,7 +261,7 @@ export default function Home() {
       </nav>
 
       {panelOpen && (
-        <div className="absolute top-28 right-4 z-[1000] w-full max-w-sm max-h-[calc(100vh-8rem)] overflow-y-auto">
+        <div className="absolute top-28 left-4 right-4 sm:left-auto sm:right-4 sm:w-96 z-[1000] max-h-[calc(100vh-8rem)] overflow-y-auto">
           <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-3xl shadow-2xl p-8 flex flex-col gap-6 transition-colors duration-300">
             <h2 className="text-3xl font-bold dark:text-white">Analizi Başlat</h2>
 
@@ -410,7 +410,7 @@ export default function Home() {
       )}
 
       {loading && taskId && (
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[1000] w-full max-w-md">
+        <div className="absolute bottom-8 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[1000]">
           <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-5">
             <p className="text-blue-700 dark:text-blue-400 font-semibold animate-pulse">Yapay zekâ bölgeyi işliyor...</p>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 break-all">Fiş No: {taskId}</p>
@@ -419,7 +419,7 @@ export default function Home() {
       )}
 
       {analysisResult && (
-        <div className="absolute bottom-8 right-4 z-[1000] w-full max-w-sm">
+        <div className="absolute bottom-8 left-4 right-4 sm:left-auto sm:right-4 sm:w-96 z-[1000]">
           <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-2xl p-5">
             <h3 className="font-bold text-green-700 dark:text-green-400 text-lg">✓ Analiz tamamlandı</h3>
             <div className="mt-3 space-y-2 text-gray-700 dark:text-gray-200">
