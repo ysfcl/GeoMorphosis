@@ -168,7 +168,7 @@ test('analyze route forwards the regional payload to the AI engine and returns t
   }
 });
 
-test('analyze polling route returns the final task status and notifies on completion', async () => {
+test('analyze polling route returns the final task status without notifying', async () => {
   const originalToken = process.env.TELEGRAM_BOT_TOKEN;
   const originalChatId = process.env.TELEGRAM_CHAT_ID;
   const originalAiEngineUrl = process.env.NEXT_PUBLIC_AI_ENGINE_URL;
@@ -208,7 +208,10 @@ test('analyze polling route returns the final task status and notifies on comple
     assert.equal(payload.status, 'completed');
     assert.equal(payload.result.deforestation_risk, 'orta');
     assert.equal(calls.filter((entry) => entry.includes('/api/status/task-456')).length, 1);
-    assert.equal(calls.filter((entry) => entry.includes('api.telegram.org')).length, 1);
+    // Abone bildirimi artik polling'den degil worker'dan gidiyor: 'completed'
+    // durumu birden fazla kez sorgulanabildigi icin buradan gonderim mukerrer
+    // mesaj uretiyordu. Ayrintili testler tests/notification-routing.test.js'te.
+    assert.equal(calls.filter((entry) => entry.includes('api.telegram.org')).length, 0);
   });
 
   if (originalAiEngineUrl === undefined) {

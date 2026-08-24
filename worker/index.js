@@ -67,20 +67,26 @@ function buildAlertText(taskId, result) {
     ].join('\n');
 }
 
-async function sendAnalysisEmailToSubscriber(userId, result) {
-    if (!userId) return false;
-
-    const report = {
+function buildSubscriberReport(result) {
+    return {
         lat: result?.coordinates?.lat,
-        lng: result?.coordinates?.lon,
+        lon: result?.coordinates?.lon,
         riskLevel: result?.fire_risk || 'normal',
         summary: result?.demo_mode
             ? 'Uydu verisi alınamadığı için demo değerleri gösterildi.'
             : 'Bölge analizi tamamlandı, detaylar panelde görüntülenebilir.',
+        timestamp: new Date().toISOString(),
     };
+}
+
+// E-posta ve Telegram ayni sozlesmeyi kullaniyor; tek fark rota adi.
+async function notifySubscriber(channel, userId, result) {
+    if (!userId) return false;
+
+    const report = buildSubscriberReport(result);
 
     try {
-        const response = await fetch(`${frontendUrl}/api/notify/email/subscriber`, {
+        const response = await fetch(`${frontendUrl}/api/notify/${channel}/subscriber`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -92,14 +98,14 @@ async function sendAnalysisEmailToSubscriber(userId, result) {
         });
 
         if (!response.ok) {
-            console.error(`[MUTFAK] Abone e-postası gönderilemedi: HTTP ${response.status}`);
+            console.error(`[MUTFAK] Abone bildirimi gönderilemedi (${channel}): HTTP ${response.status}`);
             return false;
         }
 
         const payload = await response.json();
         return payload.success === true;
     } catch (error) {
-        console.error('[MUTFAK] Abone e-postası servisine ulaşılamadı:', error);
+        console.error(`[MUTFAK] Bildirim servisine ulaşılamadı (${channel}):`, error);
         return false;
     }
 }
@@ -158,7 +164,18 @@ async function processTask(taskId) {
             `${result.demo_mode ? ' (demo modu)' : ''}`
         );
 
-        await sendAnalysisEmailToSubscriber(payload.user_id, result);
+        // Iki kanal da burada tetikleniyor: sunucu tarafinda, analiz basina bir kez.
+        const [emailSent, telegramSent] = await Promise.all([
+            notifySubscriber('email', payload.user_id, result),
+            notifySubscriber('telegram', payload.user_id, result),
+        ]);
+
+        if (payload.user_id) {
+            console.log(
+                `[MUTFAK] Abone bildirimi: e-posta=${emailSent ? 'gonderildi' : 'atlandi'} ` +
+                `telegram=${telegramSent ? 'gonderildi' : 'atlandi'}`
+            );
+        }
 
         // 5. Erken uyarı bildirimi
         if (shouldAlert(result)) {
@@ -206,4 +223,11 @@ if (require.main === module) {
     startWorker();
 }
 
-module.exports = { processTask, extractCoordinates, shouldAlert, sendAnalysisEmailToSubscriber, startWorker };
+module.exports = {
+    processTask,
+    extractCoordinates,
+    shouldAlert,
+    buildSubscriberReport,
+    notifySubscriber,
+    startWorker,
+};
