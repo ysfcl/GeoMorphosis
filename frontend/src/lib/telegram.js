@@ -22,6 +22,16 @@ async function postMessage(token, chatId, message, title) {
       }),
     });
 
+    if (!response.ok) {
+      // Telegram hata sebebini govdede aciklikla soyluyor ("chat not found",
+      // "bot was blocked by the user" gibi). Yutulursa "gonderilmedi" ile
+      // "abone yok" birbirinden ayirt edilemiyor.
+      const detail = await response.json().catch(() => ({}));
+      console.error(
+        `Telegram gönderimi başarısız (HTTP ${response.status}): ${detail.description ?? 'sebep bilinmiyor'}`
+      );
+    }
+
     return response.ok;
   } catch (error) {
     console.error('Telegram bildirim hatası:', error);
@@ -146,6 +156,13 @@ export async function sendAnalysisReportToUser(userId, reportData) {
         },
       }),
     });
+
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      console.error(
+        `Analiz raporu gönderilemedi (HTTP ${response.status}): ${detail.description ?? 'sebep bilinmiyor'}`
+      );
+    }
 
     return response.ok;
   } catch (error) {

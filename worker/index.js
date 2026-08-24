@@ -103,6 +103,13 @@ async function notifySubscriber(channel, userId, result) {
         }
 
         const payload = await response.json();
+
+        if (payload.success !== true) {
+            // Rota 200 donuyor ama gonderim basarisiz olabilir (abone yok,
+            // chat bulunamadi, token reddedildi...). Sebep frontend logunda.
+            console.warn(`[MUTFAK] ${channel} bildirimi gonderilemedi; sebep icin frontend loguna bakin.`);
+        }
+
         return payload.success === true;
     } catch (error) {
         console.error(`[MUTFAK] Bildirim servisine ulaşılamadı (${channel}):`, error);

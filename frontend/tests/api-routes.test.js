@@ -29,24 +29,40 @@ function withMockedFetch(mockImplementation, callback) {
 test('subscribe route accepts a valid subscription payload', async () => {
   // Abonelik artik Prisma uzerinden yaziliyor; testlerde @/lib/prisma
   // tests/stubs/prisma.js ile karsilanir, gercek veritabanina dokunulmaz.
-  const response = await subscribePOST(
-    createJsonRequest({
+  //
+  // SMTP ayarlari BILEREK bosaltiliyor. Aksi halde test ortam degiskenlerine
+  // bagimli hale geliyor: .env'de gercek SMTP varsa route kodu devCode olarak
+  // dondurmek yerine gercekten e-posta gondermeye calisiyor, test hem kiriliyor
+  // hem de sahte adrese posta atmaya ugrasiyor.
+  const smtpKeys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS'];
+  const savedSmtp = Object.fromEntries(smtpKeys.map((key) => [key, process.env[key]]));
+  smtpKeys.forEach((key) => delete process.env[key]);
+
+  try {
+    const response = await subscribePOST(
+      createJsonRequest({
+        email: 'qa@example.com',
+        user_id: 'qa-user-42',
+        notification_type: 'email',
+      })
+    );
+
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.equal(payload.success, true);
+    assert.deepEqual(payload.subscription, {
       email: 'qa@example.com',
-      user_id: 'qa-user-42',
       notification_type: 'email',
-    })
-  );
-
-  assert.equal(response.status, 200);
-
-  const payload = await response.json();
-  assert.equal(payload.success, true);
-  assert.deepEqual(payload.subscription, {
-    email: 'qa@example.com',
-    notification_type: 'email',
-  });
-  // SMTP yapilandirilmadigindan dogrulama kodu devCode olarak doner.
-  assert.match(payload.devCode, /^\d{6}$/);
+    });
+    // SMTP yapilandirilmadigindan dogrulama kodu devCode olarak doner.
+    assert.match(payload.devCode, /^\d{6}$/);
+  } finally {
+    smtpKeys.forEach((key) => {
+      if (savedSmtp[key] === undefined) delete process.env[key];
+      else process.env[key] = savedSmtp[key];
+    });
+  }
 });
 
 test('email verify route confirms the matching code', async () => {
