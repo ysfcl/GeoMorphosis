@@ -322,7 +322,7 @@ function RegionContent() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setActiveTab('map')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -350,10 +350,7 @@ function RegionContent() {
           <div className="card p-0 overflow-hidden">
             <div
               ref={mapRef}
-              style={{
-                height: '600px',
-                width: '100%',
-              }}
+              className="h-[350px] sm:h-[450px] md:h-[600px] w-full"
             />
           </div>
         )}
@@ -383,7 +380,7 @@ function RegionContent() {
                 {/* Bildirim kanallari (Faz 2-3): e-posta dogrulamali abonelik,
                     Telegram bot eslestirmesi. */}
                 <div className="mt-6 border border-gray-200 rounded-lg p-5">
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                     <h3 className="font-semibold">Bildirim Kanalları</h3>
                     {notifStage === 'verified' && (
                       <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
