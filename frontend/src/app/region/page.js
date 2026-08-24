@@ -7,6 +7,7 @@ import Analytics from '@/components/Analytics';
 import Report from '@/components/Report';
 import { Mail, Send } from 'lucide-react';
 import { getUserId } from '@/lib/userId';
+import { saveLastReport } from '@/lib/reportPayload';
 
 function RegionContent() {
   const searchParams = useSearchParams();
@@ -67,6 +68,8 @@ function RegionContent() {
           if (statusData.status === 'completed') {
             stopPolling(); // İş bitti, sormayı bırak
             setRegionData(statusData.result); // Analytics.js'i besleyecek veriyi state'e yaz
+            // Dogrulama sonrasi "ilk raporu gonder" akisi icin sakla
+            saveLastReport(statusData.result);
             setAnalysisStatus('success');
           } else if (statusData.status === 'failed') {
             stopPolling();

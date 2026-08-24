@@ -638,13 +638,13 @@ export default function Map({ onRegionSelect, isDarkMode }) {
 
       {/* Sol Harita Görünümü Paneli */}
 
-      <div className="absolute top-24 left-4 z-[1000] bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-4 w-64 border border-transparent dark:border-gray-700 transition-colors duration-300">
+      <div className="absolute top-20 left-2 z-[1000] bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-2.5 w-36 sm:top-24 sm:left-4 sm:p-4 sm:w-64 border border-transparent dark:border-gray-700 transition-colors duration-300">
 
-        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 transition-colors duration-300">
+        <h3 className="hidden sm:block text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 transition-colors duration-300">
           Harita Görünümü
         </h3>
 
-        <div className="flex bg-gray-100 dark:bg-gray-900 rounded-xl p-1 mb-4 transition-colors duration-300">
+        <div className="flex bg-gray-100 dark:bg-gray-900 rounded-xl p-1 mb-0 sm:mb-4 transition-colors duration-300">
 
           {/* NORMAL */}
 
@@ -654,7 +654,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
                 'normal'
               )
             }
-            className={`flex-1 text-sm font-medium py-2 rounded-lg transition-colors duration-300 ${
+            className={`flex-1 text-xs sm:text-sm font-medium py-1.5 sm:py-2 rounded-lg transition-colors duration-300 ${
               baseMap ===
               'normal'
                 ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white'
@@ -672,7 +672,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
                 'satellite'
               )
             }
-            className={`flex-1 text-sm font-medium py-2 rounded-lg transition-colors duration-300 ${
+            className={`flex-1 text-xs sm:text-sm font-medium py-1.5 sm:py-2 rounded-lg transition-colors duration-300 ${
               baseMap ===
               'satellite'
                 ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white'
@@ -684,13 +684,15 @@ export default function Map({ onRegionSelect, isDarkMode }) {
 
         </div>
 
-        {/* KATMANLAR */}
+        {/* KATMANLAR — mobilde gizli, sadece Normal/Uydu kalsin */}
 
-        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 transition-colors duration-300">
-          Katmanlar
-        </h3>
+        <div className="hidden sm:block">
 
-        <div className="space-y-2">
+          <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 transition-colors duration-300">
+            Katmanlar
+          </h3>
+
+          <div className="space-y-2">
 
           {overlayOptions.map(
             (option) => (
@@ -759,6 +761,10 @@ export default function Map({ onRegionSelect, isDarkMode }) {
             </span>
 
           </div>
+
+        </div>
+
+        {/* /hidden sm:block (Katmanlar + Yogunluk) */}
 
         </div>
 

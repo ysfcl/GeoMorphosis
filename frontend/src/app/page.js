@@ -7,6 +7,7 @@ import Map from '@/components/Map';
 import Toast from '@/components/Toast';
 import { getUserId } from '@/lib/userId';
 import { MAX_SELECTION_AREA_KM2 } from '@/lib/mapLimits';
+import { saveLastReport, loadLastReport } from '@/lib/reportPayload';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -45,6 +46,9 @@ export default function Home() {
   const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
   const [notifEmail, setNotifEmail] = useState('');
   const [webPushStatus, setWebPushStatus] = useState(false);
+  // Dogrulama akisi: kayit sonrasi 6 haneli kod girme adimi
+  const [pendingVerify, setPendingVerify] = useState(false);
+  const [verifyCode, setVerifyCode] = useState('');
 
   const pollRef = useRef(null);
   const pollInFlightRef = useRef(false);
@@ -85,6 +89,8 @@ export default function Home() {
   stopPolling();
   setAnalysisResult(statusData.result || statusData);
   setLoading(false);
+  // Dogrulama sonrasi "ilk raporu hemen gonder" icin son sonucu sakla
+  saveLastReport(statusData.result || statusData);
   setToast({ type: 'success', title: 'Analiz Tamamlandı', message: 'Bölge analizi başarıyla sonuçlandı.' });
 
   // Analiz tamamlanınca otomatik olarak detay sayfasına yönlendir
@@ -162,7 +168,8 @@ export default function Home() {
     router.push(`/region?${params.toString()}`);
   };
 
-  // --- YENİ EKLENEN: E-POSTAYI ARKA PLANA (API'YE) GÖNDERME FONKSİYONU ---
+  // E-postayi /api/subscribe'a gonderir; SMTP calismiyorsa devCode ile
+  // dogrulama adimina gecer, calisiyorsa kodun mailde oldugunu soyler.
   const handleEmailSave = async () => {
     if (!notifEmail || !notifEmail.includes('@')) {
       setToast({ type: 'warning', title: 'Eksik Bilgi', message: 'Lütfen geçerli bir e-posta adresi girin.' });
@@ -173,20 +180,62 @@ export default function Home() {
       const res = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: notifEmail, 
+        body: JSON.stringify({
+          email: notifEmail,
           user_id: getUserId(),
-          notification_type: 'email' 
+          notification_type: 'email'
         }),
       });
 
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
-        setToast({ type: 'success', title: 'Bağlantı Başarılı', message: 'E-posta adresiniz sisteme başarıyla kaydedildi.' });
+        if (data.devCode) {
+          // Mail gitmediyse kodu ekranda gosterip dogrulama adimina gec
+          setVerifyCode(String(data.devCode));
+          setPendingVerify(true);
+          setToast({ type: 'info', title: 'Doğrulama Gerekli', message: `SMTP ayarlanmadı; doğrulama kodun: ${data.devCode}` });
+        } else {
+          setPendingVerify(true);
+          setVerifyCode('');
+          setToast({ type: 'success', title: 'Kod Gönderildi', message: 'E-postana 6 haneli doğrulama kodu gönderildi.' });
+        }
       } else {
-        setToast({ type: 'danger', title: 'Hata', message: 'Sisteme kaydedilirken bir sorun oluştu.' });
+        setToast({ type: 'danger', title: 'Hata', message: data.error || 'Sisteme kaydedilirken bir sorun oluştu.' });
       }
     } catch (err) {
       console.error('E-posta kayıt hatası:', err);
+      setToast({ type: 'danger', title: 'Bağlantı Hatası', message: 'Sunucuya ulaşılamadı.' });
+    }
+  };
+
+  // Dogrulama adimi: 6 haneli kod /api/verify'a gonderilir; yaninda son
+  // analiz raporu da tasinir, boylece dogrulama bitince PDF hemen gider.
+  const handleVerifyCode = async () => {
+    try {
+      const res = await fetch('/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: getUserId(), code: verifyCode, report: loadLastReport() }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        setPendingVerify(false);
+        setVerifyCode('');
+        setNotifEmail('');
+        setIsNotifModalOpen(false);
+        setToast({
+          type: data.emailSent ? 'success' : 'info',
+          title: 'Doğrulandı ✓',
+          message: data.message || 'Analiz raporları e-postanıza gönderilecek.',
+        });
+      } else {
+        setToast({ type: 'danger', title: 'Hatalı Kod', message: data.error || 'Doğrulama kodu geçersiz.' });
+      }
+    } catch (err) {
+      console.error('Dogrulama hatasi:', err);
       setToast({ type: 'danger', title: 'Bağlantı Hatası', message: 'Sunucuya ulaşılamadı.' });
     }
   };
@@ -254,14 +303,14 @@ export default function Home() {
       </nav>
 
       {panelOpen && (
-        <div className="absolute top-28 right-4 z-[1000] w-full max-w-sm max-h-[calc(100vh-8rem)] overflow-y-auto">
-          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-3xl shadow-2xl p-8 flex flex-col gap-6 transition-colors duration-300">
-            <h2 className="text-3xl font-bold dark:text-white">Analizi Başlat</h2>
+        <div className="absolute top-[4.5rem] left-3 right-3 sm:top-28 sm:right-4 sm:left-auto z-[1000] w-full max-w-sm max-h-[calc(100vh-8rem)] overflow-y-auto">
+          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-3xl shadow-2xl p-5 sm:p-8 flex flex-col gap-4 sm:gap-6 transition-colors duration-300">
+            <h2 className="text-xl sm:text-3xl font-bold dark:text-white">Analizi Başlat</h2>
 
             {selectedRegion ? (
               <>
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-6">
-                  <h3 className="text-xl font-semibold mb-4 dark:text-white">Seçilen Alan / Koordinatlar</h3>
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-4 sm:p-6">
+                  <h3 className="text-base sm:text-xl font-semibold mb-3 sm:mb-4 dark:text-white">Seçilen Alan / Koordinatlar</h3>
                   
                   {/* Yeni şık koordinat görünümü */}
                   {resolveCoordinates(selectedRegion) && (
@@ -306,9 +355,9 @@ export default function Home() {
                   )}
                 </div>
 
-                <div className="flex gap-3">
-                  <button onClick={handleAnalyze} disabled={loading} className="flex-1 bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700 transition">Analiz Başlat</button>
-                  <button onClick={handleDetail} className="flex-1 bg-gray-200 dark:bg-gray-700 dark:text-white rounded-xl py-3 font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition">Detay</button>
+                <div className="flex gap-2 sm:gap-3">
+                  <button onClick={handleAnalyze} disabled={loading} className="flex-1 bg-blue-600 text-white rounded-xl py-2.5 text-sm sm:py-3 sm:text-base font-semibold hover:bg-blue-700 transition">Analiz Başlat</button>
+                  <button onClick={handleDetail} className="flex-1 bg-gray-200 dark:bg-gray-700 dark:text-white rounded-xl py-2.5 text-sm sm:py-3 sm:text-base font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition">Detay</button>
                 </div>
               </>
             ) : (
@@ -342,21 +391,55 @@ export default function Home() {
                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">
                   <Mail size={16} /> E-Posta Bildirimleri
                 </label>
-                <div className="flex gap-2">
-                  <input 
-                    type="email" 
-                    value={notifEmail} 
-                    onChange={e => setNotifEmail(e.target.value)} 
-                    placeholder="ornek@email.com" 
-                    className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm outline-none focus:border-blue-500 dark:text-white transition" 
-                  />
-                  <button 
-                    onClick={handleEmailSave} 
-                    className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition"
-                  >
-                    Kaydet
-                  </button>
-                </div>
+                {pendingVerify ? (
+                  /* 2. ADIM: dogrulama kodu girisi */
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <strong>{notifEmail}</strong> adresine gönderilen 6 haneli kodu gir.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={verifyCode}
+                        onChange={e => setVerifyCode(e.target.value.replace(/\D/g, ''))}
+                        placeholder="______"
+                        className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-lg font-mono tracking-[0.4em] text-center outline-none focus:border-blue-500 dark:text-white transition"
+                      />
+                      <button
+                        onClick={handleVerifyCode}
+                        disabled={!verifyCode || verifyCode.length < 6}
+                        className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-green-700 transition disabled:opacity-40"
+                      >
+                        Doğrula
+                      </button>
+                      <button
+                        onClick={() => setPendingVerify(false)}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 px-2 text-sm transition"
+                      >
+                        Geri
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* 1. ADIM: e-posta kaydi */
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={notifEmail}
+                      onChange={e => setNotifEmail(e.target.value)}
+                      placeholder="ornek@email.com"
+                      className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm outline-none focus:border-blue-500 dark:text-white transition"
+                    />
+                    <button
+                      onClick={handleEmailSave}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition"
+                    >
+                      Kaydet
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* 2. Telegram Formu */}

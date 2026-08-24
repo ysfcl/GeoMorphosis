@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { getActiveEmailSubscription } from '@/lib/email-subscriptions';
+import { buildAnalysisPdf } from '@/lib/reportPayload';
 //dotenv'e ihtiyaç duyulmuyor çünkü Next.js otomatik olarak .env dosyasını yükler ve process.env üzerinden erişim sağlar.
 
 let transporter = null;
@@ -21,6 +22,9 @@ function getTransporter() {
     port: Number(port) || 587,
     secure: process.env.SMTP_SECURE === 'true',
     auth: { user, pass },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 
   return transporter;
@@ -31,7 +35,7 @@ export function isEmailConfigured() {
   return Boolean(getTransporter());
 }
 
-export async function sendEmailNotification(to, message, title = 'Sistem Bildirimi') {
+export async function sendEmailNotification(to, message, title = 'Sistem Bildirimi', attachments = []) {
   const transport = getTransporter();
 
   if (!transport) {
@@ -46,6 +50,7 @@ export async function sendEmailNotification(to, message, title = 'Sistem Bildiri
       subject: title,
       html: `<h2>${title}</h2><p>${message}</p>`,
       text: `${title}\n\n${message}`,
+      attachments,
     });
 
     return true;
@@ -72,13 +77,41 @@ export async function sendAnalysisEmailToUser(userId, report) {
     };
     const risk = riskLabels[report.riskLevel] || 'Normal';
     const message = [
-      `Konum: ${report.lat}, ${report.lon}`,
+      `Konum: ${report.lat}, ${report.lng ?? report.lon}`,
       `Risk seviyesi: ${risk}`,
       '',
       report.summary,
     ].join('\n');
 
-    return sendEmailNotification(subscription.email, message, 'GeoMorphosis Analiz Raporu');
+    // Raporu PDF'e cevirip ek olarak gonder; PDF uretimi basarisa
+    // mailde "Rapor ekte" notu da dusuyor.
+    let attachments = [];
+    let pdfNote = '';
+    try {
+      const pdfBuffer = buildAnalysisPdf(report);
+      const regionSlug = String(report.regionName || 'bolge')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+      attachments = [
+        {
+          filename: `geomorphosis-${regionSlug || 'rapor'}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf',
+        },
+      ];
+      pdfNote = '\n\nDetaylı rapor ektedir.';
+    } catch (error) {
+      console.error('PDF olusturulamadi, metin rapor gonderiliyor:', error);
+    }
+
+    // notification_channels modelinde e-posta alani "destination".
+    return sendEmailNotification(
+      subscription.destination,
+      message + pdfNote,
+      'GeoMorphosis Analiz Raporu',
+      attachments
+    );
   } catch (error) {
     console.error('Analiz e-postası gönderme hatası:', error);
     return false;
