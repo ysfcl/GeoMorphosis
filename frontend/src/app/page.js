@@ -408,6 +408,41 @@ export default function Home() {
           </div>
         </div>
       )}
+            {isAboutOpen && (
+  <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-gray-100 dark:border-gray-700">
+      
+      <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700">
+        <h3 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+          <Info className="text-purple-600 dark:text-purple-400" size={24} />
+          GeoMorphosis Hakkında
+        </h3>
+        <button onClick={() => setIsAboutOpen(false)} className="text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded-full transition-colors">
+          <X size={20} />
+        </button>
+      </div>
+
+      <div className="p-6 space-y-4 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+        <p>
+          <strong className="text-gray-900 dark:text-white">GeoMorphosis</strong>, uydu görüntüleri ve yapay zekâ algoritmaları kullanarak çevresel değişimleri, ormansızlaşma risklerini ve ekolojik kirliliği izleyen kapsamlı bir platformdur.
+        </p>
+        <p>
+          Kullanıcılar harita üzerinde diledikleri bölgeyi seçerek güncel uydu verilerine erişebilir, alan analizi gerçekleştirebilir ve olası risk durumlarına karşı e-posta veya Telegram bildirimleri alabilir.
+        </p>
+      </div>
+
+      <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-end">
+        <button 
+          onClick={() => setIsAboutOpen(false)} 
+          className="bg-gray-900 dark:bg-gray-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-black dark:hover:bg-gray-600 transition"
+        >
+          Kapat
+        </button>
+      </div>
+
+    </div>
+  </div>
+      )}
 
       {loading && taskId && (
         <div className="absolute bottom-8 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[1000]">
