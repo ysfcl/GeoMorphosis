@@ -71,6 +71,10 @@ services:
       # kapanir. Bos birakilirsa worker Telegram'i kendisi yoklar; boylece
       # genel adres olmadan da hesap eslestirme calisir.
       - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-}
+      # Gelistirmede hesap eslestirmeyi test etmek icin true yapin. DIKKAT:
+      # ayni bot token'i icin ekipte YALNIZCA BIR kisi acmali; Telegram tek
+      # dinleyiciye izin verdigi icin ikincisi 409 Conflict alir.
+      - TELEGRAM_POLLING=${TELEGRAM_POLLING:-false}
       # Erken uyari e-postasinin gidecegi adres (bos ise SMTP_USER kullanilir)
       - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
       # Uydu indirme + YOLO icin ust sinir (ms)
