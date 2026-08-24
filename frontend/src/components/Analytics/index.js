@@ -325,7 +325,7 @@ export default function Analytics({ data }) {
           </span>
         </div>
 
-        <div className="h-[320px]">
+        <div className="h-[220px] sm:h-[280px] md:h-[320px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={ndviHistory} margin={{ top: 10, right: 8, left: -20, bottom: 0 }}>
               <defs>
@@ -486,7 +486,7 @@ export default function Analytics({ data }) {
         {aiData.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-center">
             {/* Sol: lejant grid */}
-            <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+            <div className="grid grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-6">
               {aiData.map((item) => (
                 <div key={item.ad}>
                   <div className="flex items-center gap-2 mb-1.5">
@@ -506,8 +506,8 @@ export default function Analytics({ data }) {
               ))}
             </div>
 
-            {/* Sağ: etiketsiz donut */}
-            <div className="w-[220px] h-[220px] mx-auto lg:mx-0">
+            {/* Sag: etiketsiz donut */}
+            <div className="w-[180px] h-[180px] sm:w-[220px] sm:h-[220px] mx-auto lg:mx-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie

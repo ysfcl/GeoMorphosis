@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import mockHeatmapData from './mockHeatmapData';
+import { Layers, X } from 'lucide-react';
 import {
   MAX_SELECTION_AREA_M2,
   MAX_SELECTION_AREA_KM2,
@@ -20,6 +21,10 @@ export default function Map({ onRegionSelect, isDarkMode }) {
     pollution: false,
     vegetation: true,
   });
+  // Mobilde harita ayarlari paneli varsayilan olarak kapali; Analizi Baslat
+  // paneliyle cakismamasi icin bir dugmeyle acilip kapaniyor. sm: ve
+  // ustunde bu state'e bakilmaksizin panel her zaman gorunur.
+  const [showLayersPanel, setShowLayersPanel] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -636,9 +641,33 @@ export default function Map({ onRegionSelect, isDarkMode }) {
         className="w-full h-full"
       />
 
-      {/* Sol Harita Görünümü Paneli */}
+      {/* Mobilde Harita Gorunumu panelini acan/kapatan dugme.
+          sm: ve ustunde gorunmez, cunku panel zaten daima acik. */}
+      <button
+        onClick={() => setShowLayersPanel((prev) => !prev)}
+        className="sm:hidden absolute top-24 left-4 z-[1000] bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-xl shadow-lg p-3 border border-transparent dark:border-gray-700 transition-colors duration-300"
+        title="Harita Katmanlari"
+      >
+        <Layers size={20} className="text-gray-700 dark:text-gray-200" />
+      </button>
 
-      <div className="absolute top-20 left-2 z-[1000] bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-2.5 w-36 sm:top-24 sm:left-4 sm:p-4 sm:w-64 border border-transparent dark:border-gray-700 transition-colors duration-300">
+      {/* Sol Harita Gorunumu Paneli.
+          Mobilde varsayilan gizli (Analizi Baslat paneliyle cakismasin diye),
+          yukaridaki dugmeyle acilir/kapanir. sm: ve ustunde daima gorunur. */}
+
+      <div
+        className={`${showLayersPanel ? 'block' : 'hidden'} sm:block absolute top-24 left-4 z-[1000] bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-4 w-64 max-w-[calc(100vw-2rem)] border border-transparent dark:border-gray-700 transition-colors duration-300`}
+      >
+
+        {/* Mobilde panel icinde kapatma dugmesi; sm: ve ustunde gerek yok. */}
+        <div className="flex items-center justify-between mb-2 sm:hidden">
+          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+            Harita Ayarlari
+          </span>
+          <button onClick={() => setShowLayersPanel(false)}>
+            <X size={18} className="text-gray-500 dark:text-gray-300" />
+          </button>
+        </div>
 
         <h3 className="hidden sm:block text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 transition-colors duration-300">
           Harita Görünümü

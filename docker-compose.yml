@@ -68,6 +68,12 @@ services:
       - AI_ENGINE_URL=http://ai-engine:8000
       - FRONTEND_URL=http://web-client:3000
       - NOTIFICATION_INTERNAL_SECRET=${NOTIFICATION_INTERNAL_SECRET}
+      # Telegram dinleyicisi: webhook rotasina iletirken bu basligi gonderir
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
+      # Uretimde genel HTTPS adresi verilirse webhook kullanilir ve polling
+      # kapanir. Bos birakilirsa worker Telegram'i kendisi yoklar; boylece
+      # genel adres olmadan da hesap eslestirme calisir.
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-}
       # Erken uyari e-postasinin gidecegi adres (bos ise SMTP_USER kullanilir)
       - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
       # Uydu indirme + YOLO icin ust sinir (ms)

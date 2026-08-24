@@ -117,3 +117,8 @@ export async function sendAnalysisEmailToUser(userId, report) {
     return false;
   }
 }
+export async function sendVerificationCodeEmail(to, code) {
+  const title = 'GeoMorphosis E-Posta Doğrulama Kodu';
+  const message = `Doğrulama kodunuz: ${code}\nBu kod ile e-posta aboneliğinizi onaylayabilirsiniz.`;
+  return sendEmailNotification(to, message, title);
+}
