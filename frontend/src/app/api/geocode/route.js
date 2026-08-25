@@ -203,10 +203,7 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Arama metni cok uzun.' }, { status: 400 });
   }
 
-  // DIKKAT: toLocaleLowerCase('tr') KULLANMAYIN. Turkce kuralinda 'I' harfi
-  // 'i' degil 'ı' oluyor; boylece "BARTIN" -> "bartın" ama "Bartin" -> "bartin"
-  // olup ayni aramanin iki farkli onbellek anahtari uretiyor. Anahtarin dogal
-  // dil dogrulugu gerekmiyor, tutarliligi gerekiyor.
+
   const cacheKey = query.toLowerCase();
   const cached = readCache(cacheKey);
   if (cached) {

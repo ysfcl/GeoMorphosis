@@ -154,7 +154,7 @@ export default function MapSearch({ onSelect }) {
           onFocus={() => {
             if (results.length > 0 || error) setOpen(true);
           }}
-          placeholder="Konum ara (orn. Bartin Muratbey)"
+          placeholder="Konum ara (örn. Bursa, Nilüfer, Uludağ)"
           aria-label="Konum ara"
           role="combobox"
           aria-expanded={open}
