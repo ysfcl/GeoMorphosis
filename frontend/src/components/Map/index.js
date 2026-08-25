@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Layers, X } from 'lucide-react';
 import { MAX_SELECTION_AREA_M2, MAX_SELECTION_AREA_KM2 } from '@/lib/mapLimits';
+import MapSearch from '@/components/MapSearch';
 
 const MAX_AREA_SQ_METERS = MAX_SELECTION_AREA_M2;
 
@@ -54,6 +55,10 @@ export default function Map({ onRegionSelect, isDarkMode, selectedRegion, analys
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layersRef = useRef({});
+  // Leaflet dinamik olarak (initMap icinde) yukleniyor; arama sonucunda
+  // isaretci cizebilmek icin modul referansini sakliyoruz.
+  const leafletRef = useRef(null);
+  const searchMarkerRef = useRef(null);
 
   const [baseMap, setBaseMap] = useState('normal');
   const [activeOverlays, setActiveOverlays] = useState({
@@ -451,6 +456,9 @@ export default function Map({ onRegionSelect, isDarkMode, selectedRegion, analys
       mapInstanceRef.current =
         map;
 
+      // Arama sonucu isaretcisi bu referans uzerinden ciziliyor.
+      leafletRef.current = L;
+
       layersRef.current = {
         normalMap,
         darkMap,
@@ -474,6 +482,10 @@ export default function Map({ onRegionSelect, isDarkMode, selectedRegion, analys
 
         mapInstanceRef.current =
           null;
+
+        // Harita ile birlikte isaretci de gitti; olu referansi tutmayalim.
+        searchMarkerRef.current = null;
+        leafletRef.current = null;
       }
     };
   }, [
@@ -581,6 +593,59 @@ export default function Map({ onRegionSelect, isDarkMode, selectedRegion, analys
     isDarkMode,
     baseMap
   ]);
+
+  // ========================================================
+  // KONUM ARAMA SONUCU -> HARITAYI TASI
+  // ========================================================
+
+  const handleSearchSelect = (result) => {
+    const map = mapInstanceRef.current;
+    const L = leafletRef.current;
+    if (!map || !L || !result) return;
+
+    // Nominatim cogu kayit icin bir sinir kutusu veriyor. Kutuya oturtmak,
+    // koy secilince yakin / il secilince genis bir gorunum sagliyor - tek bir
+    // sabit zoom seviyesi ikisini birden karsilamiyor.
+    // ANIMASYON KAPALI (animate: false) - bilincli bir tercih.
+    // Leaflet'in animasyonlu zoom'u CSS gecisinin transitionend olayina
+    // bagli. Bir arama sonucu secilip animasyon tamamlanmadan ikinci bir
+    // arama yapilirsa (ya da gecis olayi hic gelmezse) map._animatingZoom
+    // takili kaliyor ve SONRAKI TUM view cagrilari sessizce yutuluyor:
+    // kutu dogru sonucu gosteriyor ama harita yerinden kimildamiyor.
+    // Kullanicinin istedigi yere gitmek, yumusak gecisten daha onemli.
+    if (result.bbox) {
+      const { south, north, west, east } = result.bbox;
+      map.fitBounds(
+        [
+          [south, west],
+          [north, east],
+        ],
+        // Cok kucuk bir noktada (tek bina) sokak seviyesine kadar dalmasin.
+        { maxZoom: 15, animate: false }
+      );
+    } else {
+      map.setView([result.lat, result.lon], 14, { animate: false });
+    }
+
+    // Onceki aramanin isaretcisi kalmasin.
+    if (searchMarkerRef.current) {
+      map.removeLayer(searchMarkerRef.current);
+      searchMarkerRef.current = null;
+    }
+
+    // Varsayilan L.marker PNG ikonu bundler ortaminda kirik gorunuyor
+    // (leaflet ikon yollarini kendi cozemiyor). circleMarker vektorel;
+    // ek dosya gerektirmiyor.
+    searchMarkerRef.current = L.circleMarker([result.lat, result.lon], {
+      radius: 8,
+      color: '#2563eb',
+      weight: 3,
+      fillColor: '#3b82f6',
+      fillOpacity: 0.4,
+    })
+      .addTo(map)
+      .bindTooltip(result.name, { direction: 'top', offset: [0, -10] });
+  };
 
   // ========================================================
   // BASE MAP DEGISTIRME
@@ -726,11 +791,21 @@ export default function Map({ onRegionSelect, isDarkMode, selectedRegion, analys
         className="w-full h-full"
       />
 
+      {/* Konum arama kutusu.
+          Masaustunde ortada duruyor: solda katman paneli (w-64), sagda
+          Analizi Baslat paneli (w-96) var, ortadaki serit bos.
+          Mobilde tam genislik; bu yuzden sol paneller asagi kaydirildi.
+          z-[1100] cunku sonuc listesi diger panellerin (z-[1000]) ustunde
+          kalmali. */}
+      <div className="absolute top-24 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-[26rem] z-[1100]">
+        <MapSearch onSelect={handleSearchSelect} />
+      </div>
+
       {/* Mobilde Harita Gorunumu panelini acan/kapatan dugme.
           sm: ve ustunde gorunmez, cunku panel zaten daima acik. */}
       <button
         onClick={() => setShowLayersPanel((prev) => !prev)}
-        className="sm:hidden absolute top-24 left-4 z-[1000] bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-xl shadow-lg p-3 border border-transparent dark:border-gray-700 transition-colors duration-300"
+        className="sm:hidden absolute top-[10rem] left-4 z-[1000] bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-xl shadow-lg p-3 border border-transparent dark:border-gray-700 transition-colors duration-300"
         title="Harita Katmanlari"
       >
         <Layers size={20} className="text-gray-700 dark:text-gray-200" />
@@ -741,7 +816,7 @@ export default function Map({ onRegionSelect, isDarkMode, selectedRegion, analys
           yukaridaki dugmeyle acilir/kapanir. sm: ve ustunde daima gorunur. */}
 
       <div
-        className={`${showLayersPanel ? 'block' : 'hidden'} sm:block absolute top-24 left-4 z-[1000] bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-4 w-64 max-w-[calc(100vw-2rem)] border border-transparent dark:border-gray-700 transition-colors duration-300`}
+        className={`${showLayersPanel ? 'block' : 'hidden'} sm:block absolute top-[10rem] sm:top-24 left-4 z-[1000] bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-4 w-64 max-w-[calc(100vw-2rem)] border border-transparent dark:border-gray-700 transition-colors duration-300`}
       >
 
         {/* Mobilde panel icinde kapatma dugmesi; sm: ve ustunde gerek yok. */}
