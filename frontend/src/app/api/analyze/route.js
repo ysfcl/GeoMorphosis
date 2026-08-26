@@ -76,12 +76,6 @@ export async function POST(request) {
       // Standart anahtar lon; eski istemciler icin lng/longitude toleransı korunur
       const lon = firstPoint.lon ?? firstPoint.lng ?? firstPoint.longitude;
 
-      // Telegram'a analizin BAŞLADIĞINI (kuyruğa alındığını) bildiriyoruz
-      await sendSystemTelegramNotification(
-        `📍 Koordinat: ${firstPoint.lat}, ${lon}\nYeni bir bölge analizi mutfak kuyruğuna (Redis) başarıyla eklendi.\n🎫 Fiş No: ${data.task_id}`,
-        'GEO-PULSE Görev Kuyruğu'
-      );
-
       // Frontend'e FastAPI'den gelen task_id'yi dönüyoruz ki sorgulamaya başlasın
       return NextResponse.json(data);
 
