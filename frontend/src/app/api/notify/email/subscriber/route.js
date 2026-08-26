@@ -19,7 +19,9 @@ export async function POST(request) {
       );
     }
 
-    const isSent = await sendAnalysisEmailToUser(userId, report);
+    const isSent = await sendAnalysisEmailToUser(userId, report, {
+      baseUrl: new URL(request.url).origin,
+    });
     return Response.json({ success: isSent });
   } catch (error) {
     console.error('Abone analiz e-postası hatası:', error);

@@ -1,5 +1,7 @@
 import nodemailer from 'nodemailer';
 import { getActiveEmailSubscription } from '@/lib/email-subscriptions';
+import { buildAnalysisReportPdf } from '@/lib/pdfReport';
+import { summarizeAnalysis } from '@/lib/reportPayload';
 //dotenv'e ihtiyaç duyulmuyor çünkü Next.js otomatik olarak .env dosyasını yükler ve process.env üzerinden erişim sağlar.
 
 let transporter = null;
@@ -21,6 +23,9 @@ function getTransporter() {
     port: Number(port) || 587,
     secure: process.env.SMTP_SECURE === 'true',
     auth: { user, pass },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 
   return transporter;
@@ -31,7 +36,7 @@ export function isEmailConfigured() {
   return Boolean(getTransporter());
 }
 
-export async function sendEmailNotification(to, message, title = 'Sistem Bildirimi') {
+export async function sendEmailNotification(to, message, title = 'Sistem Bildirimi', attachments = []) {
   const transport = getTransporter();
 
   if (!transport) {
@@ -46,6 +51,7 @@ export async function sendEmailNotification(to, message, title = 'Sistem Bildiri
       subject: title,
       html: `<h2>${title}</h2><p>${message}</p>`,
       text: `${title}\n\n${message}`,
+      attachments,
     });
 
     return true;
@@ -55,7 +61,16 @@ export async function sendEmailNotification(to, message, title = 'Sistem Bildiri
   }
 }
 
-export async function sendAnalysisEmailToUser(userId, report) {
+/**
+ * Analiz raporunu PDF ekiyle kullaniciya gonderir.
+ *
+ * @param {object} report  HAM analiz sonucu (statusData.result ile ayni sekil).
+ * @param {object} [options]
+ * @param {string} [options.baseUrl]  Sunucu tarafinda font/gorsel cekmek icin
+ *   mutlak adres (ornek: http://localhost:3000). Route'lar istegin origin'ini
+ *   gecirir; tarayici context'inde gerek yok.
+ */
+export async function sendAnalysisEmailToUser(userId, report, options = {}) {
   try {
     const subscription = await getActiveEmailSubscription(userId);
 
@@ -70,15 +85,46 @@ export async function sendAnalysisEmailToUser(userId, report) {
       orta: 'Orta',
       yuksek: 'Yüksek',
     };
-    const risk = riskLabels[report.riskLevel] || 'Normal';
+    const coords = report?.coordinates || {};
+    const risk = riskLabels[report?.deforestation_risk] || 'Normal';
     const message = [
-      `Konum: ${report.lat}, ${report.lon}`,
+      `Konum: ${coords.lat ?? '-'}, ${coords.lon ?? '-'}`,
       `Risk seviyesi: ${risk}`,
       '',
-      report.summary,
+      summarizeAnalysis(report),
     ].join('\n');
 
-    return sendEmailNotification(subscription.destination, message, 'GeoMorphosis Analiz Raporu');
+    // Raporu arayuzdeki indirmeyle BIREBIR AYNI ureten ortak ureticiden
+    // cevirip ek olarak gonder; PDF uretimi basarisa mailde "Rapor ekte"
+    // notu da dusuyor.
+    let attachments = [];
+    let pdfNote = '';
+    try {
+      const doc = await buildAnalysisReportPdf(report, options.baseUrl || '');
+      const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
+      const regionSlug = String(report?.region_name || 'bolge')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+      attachments = [
+        {
+          filename: `geomorphosis-${regionSlug || 'rapor'}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf',
+        },
+      ];
+      pdfNote = '\n\nDetaylı rapor ektedir.';
+    } catch (error) {
+      console.error('PDF olusturulamadi, metin rapor gonderiliyor:', error);
+    }
+
+    // notification_channels modelinde e-posta alani "destination".
+    return sendEmailNotification(
+      subscription.destination,
+      message + pdfNote,
+      'GeoMorphosis Analiz Raporu',
+      attachments
+    );
   } catch (error) {
     console.error('Analiz e-postası gönderme hatası:', error);
     return false;

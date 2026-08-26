@@ -1,10 +1,41 @@
 const { createClient } = require('redis');
 const notifier = require('./services/notifier');
 const { startTelegramPolling } = require('./services/telegramPoller');
+const fs = require('fs');
+const path = require('path');
+
+// Her baslatma seklinde (node index.js, npm start, docker-compose) ayni
+// degiskenler yuklensin diye kucuk dotenv benzeri yukleyici. Platform
+// ortamlarinda (Railway) zaten process.env dolu oldugu icin dokunmaz.
+(function loadLocalEnv() {
+  const envPath = path.join(__dirname, '.env');
+  try {
+    const content = fs.readFileSync(envPath, 'utf8');
+    for (const line of content.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      let value = trimmed.slice(eq + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (!(key in process.env)) process.env[key] = value;
+    }
+  } catch {
+    // .env yoksa sessiz gec
+  }
+})();
 
 // Docker-compose üzerinden gelen Redis adresini alıyoruz
 const redisHost = process.env.REDIS_HOST || 'localhost';
 const redisPort = process.env.REDIS_PORT || 6379;
+// Railway gibi platformlarda Redis sifre korumali olabilir
+const redisPassword = process.env.REDIS_PASSWORD;
 
 // Yapay zeka motorunun (Vezne/FastAPI) adresi
 const aiEngineUrl = process.env.AI_ENGINE_URL || 'http://localhost:8000';
@@ -14,10 +45,14 @@ const ANALYSIS_TIMEOUT_MS = Number(process.env.ANALYSIS_TIMEOUT_MS) || 180000;
 
 const ALERT_TO = process.env.ALERT_EMAIL_TO || process.env.SMTP_USER;
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+// Bildirim API'si sunucu-sunucu cagrisidir; Railway ic agindan gitmesi hem
+// DNS sorunlarini asar hem de public internete cikmaz. FRONTEND_URL ise
+// e-posta/Telegram mesajlarindaki linkler icin public adres olarak kalir.
+const notifyBaseUrl = process.env.NOTIFY_BASE_URL || frontendUrl;
 const notificationInternalSecret = process.env.NOTIFICATION_INTERNAL_SECRET;
 
 const redisClient = createClient({
-    url: `redis://${redisHost}:${redisPort}`
+    url: `redis://${redisPassword ? `default:${redisPassword}@` : ''}${redisHost}:${redisPort}`
 });
 
 redisClient.on('error', (err) => console.log('Redis İstemci Hatası:', err));
@@ -42,9 +77,9 @@ function extractCoordinates(payload) {
     return { lat: Number(lat), lon: Number(lon) };
 }
 
-// Erken uyarı eşiği: yüksek yangın riski veya kritik bitki örtüsü kaybı
+// Erken uyarı eşiği: yüksek ormansızlaşma riski veya kritik bitki örtüsü kaybı
 function shouldAlert(result) {
-    if (result?.fire_risk === 'yuksek') return true;
+    if (result?.deforestation_risk === 'yuksek') return true;
 
     const deforestation = result?.ai_results?.change_detection?.deforestation;
     return deforestation?.severity === 'CRITICAL';
@@ -59,7 +94,7 @@ function buildAlertText(taskId, result) {
         `Bölge: ${result?.region_name ?? 'Bilinmiyor'}`,
         `Koordinat: ${coords.lat}, ${coords.lon}`,
         '',
-        `Yangın riski: ${result?.fire_risk}`,
+        `Ormansızlaşma riski: ${result?.deforestation_risk}`,
         `Kirlilik seviyesi: ${result?.pollution_level}`,
         `NDVI skoru: ${result?.ndvi_score}`,
         `Bitki örtüsü kaybı: %${deforestation.loss_percentage ?? 0} (${deforestation.severity ?? 'LOW'})`,
@@ -68,26 +103,15 @@ function buildAlertText(taskId, result) {
     ].join('\n');
 }
 
-function buildSubscriberReport(result) {
-    return {
-        lat: result?.coordinates?.lat,
-        lon: result?.coordinates?.lon,
-        riskLevel: result?.fire_risk || 'normal',
-        summary: result?.demo_mode
-            ? 'Uydu verisi alınamadığı için demo değerleri gösterildi.'
-            : 'Bölge analizi tamamlandı, detaylar panelde görüntülenebilir.',
-        timestamp: new Date().toISOString(),
-    };
-}
-
 // E-posta ve Telegram ayni sozlesmeyi kullaniyor; tek fark rota adi.
+// Rapor artik HAM analiz sonucu: route'lar PDF'i arayuzdeki indirmeyle
+// birebir ayni ureten ortak ureticiden (lib/pdfReport.js) cikarir.
 async function notifySubscriber(channel, userId, result) {
-    if (!userId) return false;
-
-    const report = buildSubscriberReport(result);
+    if (!userId || !result) return false;
 
     try {
-        const response = await fetch(`${frontendUrl}/api/notify/${channel}/subscriber`, {
+        // Jenerik rota (email/telegram) + Railway ic ag adresi birlesimi
+        const response = await fetch(`${notifyBaseUrl}/api/notify/${channel}/subscriber`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -95,7 +119,7 @@ async function notifySubscriber(channel, userId, result) {
                     ? { 'x-notification-internal-secret': notificationInternalSecret }
                     : {}),
             },
-            body: JSON.stringify({ userId, report }),
+            body: JSON.stringify({ userId, report: result }),
         });
 
         if (!response.ok) {
@@ -168,7 +192,7 @@ async function processTask(taskId) {
 
         console.log(
             `[MUTFAK] Görev tamamlandı: ${taskId} | ` +
-            `yangın=${result.fire_risk} kirlilik=${result.pollution_level} ndvi=${result.ndvi_score}` +
+            `ormansızlaşma=${result.deforestation_risk ?? 'yok'} kirlilik=${result.pollution_level} ndvi=${result.ndvi_score}` +
             `${result.demo_mode ? ' (demo modu)' : ''}`
         );
 
@@ -242,7 +266,6 @@ module.exports = {
     processTask,
     extractCoordinates,
     shouldAlert,
-    buildSubscriberReport,
     notifySubscriber,
     startWorker,
 };

@@ -23,19 +23,14 @@ const ACCENT = {
 };
 
 const RISK_LABELS = { yok: 'Yok', dusuk: 'Düşük', orta: 'Orta', yuksek: 'Yüksek' };
+// "yok" gercekten %0 demek; 0'dan buyuk bir sabit vermek ustteki risk
+// kartıyla ("Yok") alttaki yuzdeler arasında tutarsızlık üretiyordu.
+const RISK_PERCENT = { yok: 0, dusuk: 28, orta: 58, yuksek: 90 };
 
-// NDVI'da bir noktanin diger tum noktalarin ortalamasindan bu kadar (mutlak)
-// sapmasi durumunda "anormal dalgalanma" olarak isaretliyoruz. 0-1 araliginda
-// 0.15, gozle gorulur bir bitki ortusu kaybi/artisina denk gelir.
+// NDVI'da bir noktanın diğer tüm noktaların ortalamasından bu kadar (mutlak)
+// sapması durumunda "anormal dalgalanma" olarak işaretliyoruz. 0-1 aralığında
+// 0.15, gözle görülür bir bitki örtüsü kaybı/artışına denk gelir.
 const ANOMALY_THRESHOLD = 0.15;
-
-// ai-engine tarafindaki _risk_from_vegetation_loss ile ayni esleme.
-function deforestationRiskFrom(deforestation) {
-  if (!deforestation?.detected) return 'yok';
-  if (deforestation.severity === 'CRITICAL') return 'yuksek';
-  if (deforestation.severity === 'HIGH') return 'orta';
-  return 'dusuk';
-}
 
 function normalizeRisk(value) {
   if (!value) return 'yok';
@@ -71,7 +66,7 @@ function RiskBar({ percent, accent }) {
   );
 }
 
-// --- Ortak tooltip kabugu ---
+// --- Ortak tooltip kabuğu ---
 function TooltipShell({ children }) {
   return (
     <div className="bg-white border border-[#E2E4E8] rounded-md shadow-md px-3 py-2 text-xs">
@@ -128,8 +123,8 @@ export default function Analytics({ data }) {
     isPlaceholderName(data?.region_name) ? null : data.region_name
   );
 
-  // Backend bir bolge adi vermediyse, koordinatlardan otomatik il adi cekiyoruz
-  // (ucretsiz OpenStreetMap Nominatim servisi ile).
+  // Backend bir bölge adı vermediyse, koordinatlardan otomatik il adı çekiyoruz
+  // (ücretsiz OpenStreetMap Nominatim servisi ile).
   useEffect(() => {
     if (!hasCoordinates || !isPlaceholderName(data?.region_name)) return;
 
@@ -160,40 +155,66 @@ export default function Analytics({ data }) {
   ];
 
   const currentPollution = normalizeRisk(data.pollution_level);
-  // data.deforestation_risk sozlesmede yok; severity change_detection altinda.
-  // Eskiden normalizeRisk(undefined) -> "yok" donuyordu ve kart %11.05 kayip
-  // gosterirken basligi "Yok" yaziyordu.
-  const currentDeforestation = deforestationRiskFrom(
-    data?.ai_results?.change_detection?.deforestation
-  );
+  const currentDeforestation = normalizeRisk(data.deforestation_risk);
 
-  // --- Tespit dagilimi GERCEK backend verisinden uretilir ---
-  // Ormansizlasma payi: change_detection.deforestation.loss_percentage
-  // Kirlilik payi: ai_results.pollution.coverage_percentage - tespit kutularinin
-  // kapladigi alan orani. Ikisi de alan tabanli olcum, ayni anlamda.
-  // Onceden kirlilik icin RISK_PERCENT tablosu kullaniliyordu; o gercek bir
-  // olcum degil, kategoriden turetilmis sabit bir cubuk genisligiydi.
+  // --- Tespit dagilimi GERCEK olcumlerden üretilir ---
+  // Kart metni, bar alt yazisi ve donut ayni rakami görmeli; seviye
+  // tablosundan türetilen sentetik paylar (%58 gibi) gerçek ölçümle
+  // (%11.07 kayıp) çeliştiği için kaldırıldı.
   const changeDetection = data?.ai_results?.change_detection ?? {};
   const deforestationInfo = changeDetection.deforestation ?? {};
-  const pollutionInfo = data?.ai_results?.pollution ?? {};
 
-  const clampPercent = (value) => Math.min(100, Math.max(0, Number(value) || 0));
-
+  // NDVI tabanli gercek kayip yuzdesi (<%1 ise backend detected=false gonderir)
   const deforestationLossPercent = deforestationInfo.detected
-    ? clampPercent(deforestationInfo.loss_percentage)
+    ? Math.min(100, Math.max(0, Number(deforestationInfo.loss_percentage) || 0))
     : 0;
-  const pollutionImpactPercent = clampPercent(
-    data?.pollution_percentage ?? pollutionInfo.coverage_percentage
-  );
+  // Risk seviyesi YOLO tespitlerinden de gelebiliyor; kaynak tespiti icin sayi
+  const deforestationDetections = Number(data?.deforestation_detections) || 0;
+
+  // Kirlilik payı doğrudan MODIS AOD ölçümünden türetilir; 0.60 tam ölçek
+  // kabul edilir ('yüksek' eşiği 0.50'nin üzerinde güvenli referans).
+  // AOD yoksa seviye tablosuna düşülür (demo modu geri uyumu).
+  const pollutionAod = Number(data?.pollution_aod);
+  const POLLUTION_FULL_SCALE_AOD = 0.6;
+  const pollutionImpactPercent = currentPollution === 'yok'
+    ? 0
+    : Number.isFinite(pollutionAod) && pollutionAod > 0
+      ? Math.min(100, Math.round((pollutionAod / POLLUTION_FULL_SCALE_AOD) * 100))
+      : RISK_PERCENT[currentPollution] ?? 0;
+
+  // Donutta sentetik seviye payı değil, gerçek NDVI ölçümü kullanılır
+  const deforestationShare = deforestationLossPercent;
+
+  // Ormansızlaşma kartının alt yazisi: once gercek kayip, kayip yoksa tespit
+  // kaynagi aciklanir ("Orta ama %0" celiskisi boylece ortadan kalkar).
+  let deforestationSublabel;
+  if (deforestationLossPercent > 0) {
+    deforestationSublabel = `Bitki örtüsü kaybı: %${deforestationLossPercent}`;
+  } else if (deforestationDetections > 0) {
+    deforestationSublabel = `YOLO tespiti: ${deforestationDetections} bölge`;
+  } else {
+    deforestationSublabel = 'Belirgin bitki örtüsü kaybı yok';
+  }
+
+  // Kirlilik kartının/bar alt yazısı: gerçek AOD değeri + türetilmiş etki yüzdesi
+  // (ormansızlaşma kartıyla simetrik görünsün diye eklendi)
+  let pollutionSublabel;
+  if (Number.isFinite(pollutionAod) && pollutionAod > 0) {
+    pollutionSublabel = `MODIS AOD: ${pollutionAod.toFixed(2)} · etkisi %${pollutionImpactPercent}`;
+  } else {
+    pollutionSublabel = currentPollution === 'yok'
+      ? 'Belirgin kirlilik etkisi yok'
+      : 'AOD ölçümü alınamadı';
+  }
 
   const aiData = [
-    { ad: 'Ormansizlasma', deger: Math.round(deforestationLossPercent), fill: ACCENT.deforestation },
+    { ad: 'Ormansızlaşma', deger: Math.round(deforestationShare), fill: ACCENT.deforestation },
     { ad: 'Kirlilik', deger: Math.round(pollutionImpactPercent), fill: ACCENT.pollution },
   ].filter((item) => item.deger > 0);
 
-  // Anormal dalgalanma tespiti: HER noktayi, kendi disindaki noktalarin
-  // ortalamasiyla karsilastiriyoruz. Sapma esik degerini asan her nokta
-  // "anomali" olarak isaretlenir (grafikte kirmizi nokta + uyari listesinde).
+  // Anormal dalgalanma tespiti: HER noktayı, kendi dışındaki noktaların
+  // ortalamasıyla karşılaştırıyoruz. Sapma eşik değerini aşan her nokta
+  // "anomali" olarak işaretlenir (grafikte kırmızı nokta + uyarı listesinde).
   const anomalies = ndviHistory
     .map((point, index) => {
       const others = ndviHistory.filter((_, i) => i !== index).map((h) => h.deger);
@@ -207,11 +228,11 @@ export default function Analytics({ data }) {
 
   return (
     <div className="space-y-5">
-      {/* Baslik */}
+      {/* Başlık */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-5 border-b border-[#E2E4E8]">
         <div>
           <p className="text-[11px] tracking-[0.15em] uppercase text-[#6B7280] mb-1">
-            Bolge Analizi
+            Bölge Analizi
           </p>
           <h1 className="text-xl font-semibold text-[#1C2128] tracking-tight">
             GeoMorphosis Analiz Paneli
@@ -224,72 +245,69 @@ export default function Analytics({ data }) {
             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#2F6F52]" />
           </span>
           <span className="text-[11px] tracking-wide text-[#2F6F52] font-medium uppercase">
-            {data.status ?? 'Tamamlandi'}
+            {data.status ?? 'Tamamlandı'}
           </span>
         </div>
       </div>
 
-      {/* KPI Kartlari */}
+      {/* KPI Kartları */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-3xl p-6 text-white shadow-xl">
-          <p className="text-sm opacity-80">🌱 NDVI Skoru</p>
+          <p className="text-sm opacity-80">🍃 NDVI Skoru</p>
           <h2 className="text-5xl font-bold mt-3 tabular-nums">
             {data.ndvi_score ?? '0'}
           </h2>
-          <p className="mt-4 text-sm opacity-80">Bitki ortusu yogunlugu</p>
+          <p className="mt-4 text-sm opacity-80">Bitki örtüsü yoğunluğu</p>
         </div>
 
         <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-3xl p-6 text-white shadow-xl">
-          <p className="text-sm opacity-80">🌳 Ormansizlasma</p>
+          <p className="text-sm opacity-80">🌳 Ormansızlaşma</p>
           <h2 className="text-4xl font-bold mt-3">
             {RISK_LABELS[currentDeforestation]}
           </h2>
           <p className="mt-4 text-sm opacity-80 tabular-nums">
-            Bitki ortusu kaybi: %{deforestationLossPercent}
+            {deforestationSublabel}
           </p>
         </div>
 
-        {/* KIRLILIK KARTI - gercek alan tabanli yuzde (coverage_percentage) */}
         <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-3xl p-6 text-white shadow-xl">
-          <p className="text-sm opacity-80">☣ Kirlilik</p>
-          <h2 className="text-4xl font-bold mt-3 tabular-nums">
-            %{pollutionImpactPercent}
+          <p className="text-sm opacity-80">🏭 Kirlilik</p>
+          <h2 className="text-4xl font-bold mt-3">
+            {RISK_LABELS[currentPollution]}
           </h2>
-          <p className="mt-4 text-sm opacity-80 tabular-nums">
-            Seviye: {RISK_LABELS[currentPollution]}
-          </p>
+          <p className="mt-4 text-sm opacity-80">Çevresel etki</p>
         </div>
 
         <div className="bg-gradient-to-r from-blue-500 to-cyan-600 rounded-3xl p-6 text-white shadow-xl">
-          <p className="text-sm opacity-80">📍 Bolge</p>
+          <p className="text-sm opacity-80">📍 Bölge</p>
           <p className="text-lg font-bold mt-3 break-words">
             {provinceName ?? 'Bilinmiyor'}
           </p>
           <p className="mt-2 text-xs opacity-70 tabular-nums">
             {hasCoordinates ? `${lat.toFixed(4)}, ${lon.toFixed(4)}` : '—'}
           </p>
-          <p className="mt-3 text-sm opacity-80">Analiz alani</p>
+          <p className="mt-3 text-sm opacity-80">Analiz alanı</p>
         </div>
       </div>
 
-      {/* Bolge Gorunumu - analiz sonucunun gorsel karsiligi */}
+      {/* Bölge Görünümü - analiz sonucunun görsel karşılığı */}
       <RegionImagery data={data} />
 
-      {/* NDVI Grafigi */}
+      {/* NDVI Grafiği */}
       <div className="bg-white border border-[#E2E4E8] rounded-lg p-6">
         <div className="flex items-start justify-between mb-2">
           <div>
             <h3 className="text-base font-bold text-[#1C2128] mb-3">
-              NDVI Degisim Analizi
+              NDVI Değişim Analizi
             </h3>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ACCENT.ndvi }} />
-                <span className="text-[11px] text-gray-500">Bu olcum</span>
+                <span className="text-[11px] text-gray-500">Bu Ölçüm</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-gray-300" />
-                <span className="text-[11px] text-gray-500">Onceki olcum</span>
+                <span className="text-[11px] text-gray-500">Önceki Ölçüm</span>
               </div>
             </div>
           </div>
@@ -394,32 +412,32 @@ export default function Analytics({ data }) {
               <ul className="space-y-0.5">
                 {anomalies.map((a) => (
                   <li key={a.ay}>
-                    <span className="font-medium">{a.ay}</span> ayi, ortalamaya gore{' '}
-                    {a.deviation > 0 ? 'beklenenden cok yuksek' : 'beklenenden cok dusuk'} bir
-                    NDVI degeri ({a.deger.toFixed(2)}) gosteriyor.
+                    <span className="font-medium">{a.ay}</span> ayı, ortalamaya göre{' '}
+                    {a.deviation > 0 ? 'beklenenden çok yüksek' : 'beklenenden çok düşük'} bir
+                    NDVI değeri ({a.deger.toFixed(2)}) gösteriyor.
                   </li>
                 ))}
               </ul>
-              <p className="mt-1 text-amber-700">Sonuclari teyit etmeniz onerilir.</p>
+              <p className="mt-1 text-amber-700">Sonuçları teyit etmeniz önerilir.</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Risk Gostergeleri */}
+      {/* Risk Göstergeleri */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="bg-white border border-[#E2E4E8] rounded-lg p-6">
           <div className="flex items-center justify-between mb-5">
             <p className="text-[11px] tracking-[0.12em] uppercase text-[#6B7280]">
-              Ormansizlasma Seviyesi
+              Ormansızlaşma Seviyesi
             </p>
             <span className="text-sm font-medium" style={{ color: ACCENT.deforestation }}>
               {RISK_LABELS[currentDeforestation]}
             </span>
           </div>
-          <RiskBar percent={deforestationLossPercent} accent={ACCENT.deforestation} />
+          <RiskBar percent={RISK_PERCENT[currentDeforestation]} accent={ACCENT.deforestation} />
           <p className="text-xs text-[#9CA3AF] mt-3 tabular-nums">
-            Tespit edilen bitki ortusu kaybi: %{deforestationLossPercent}
+            {deforestationSublabel}
           </p>
         </div>
 
@@ -429,42 +447,39 @@ export default function Analytics({ data }) {
               Kirlilik Seviyesi
             </p>
             <span className="text-sm font-medium" style={{ color: ACCENT.pollution }}>
-              %{pollutionImpactPercent}
+              {RISK_LABELS[currentPollution]}
             </span>
           </div>
-          <RiskBar percent={pollutionImpactPercent} accent={ACCENT.pollution} />
+          <RiskBar percent={RISK_PERCENT[currentPollution]} accent={ACCENT.pollution} />
           <p className="text-xs text-[#9CA3AF] mt-3 tabular-nums">
-            Tespit edilen kirlilik alani: %{pollutionImpactPercent}
-            {pollutionInfo.detection_count
-              ? ` (${pollutionInfo.detection_count} tespit)`
-              : ''}
+            {pollutionSublabel}
           </p>
         </div>
       </div>
 
-      {/* Yapay Zeka Dagilimi */}
+      {/* Yapay Zekâ Dağılımı */}
       <div className="bg-white border border-[#E2E4E8] rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-bold text-[#1C2128]">
-            Yapay Zeka Tespit Dagilimi
+            Yapay Zekâ Tespit Dağılımı
           </h3>
         </div>
 
         {aiData.length === 0 ? (
           <p className="text-[15px] text-[#374151] leading-relaxed mb-8 max-w-xl">
-            Bu analizde belirgin bir <span className="font-semibold text-[#1C2128]">ormansizlasma kaybi</span> veya{' '}
+            Bu analizde belirgin bir <span className="font-semibold text-[#1C2128]">ormansızlaşma kaybı</span> veya{' '}
             <span className="font-semibold text-[#1C2128]">kirlilik etkisi</span> tespit edilmedi.
           </p>
         ) : (
           <p className="text-[15px] text-[#374151] leading-relaxed mb-8 max-w-xl">
-            Bu bolgede yapilan analizde{' '}
+            Bu bölgede yapılan analizde{' '}
             {aiData.map((item, index) => (
               <span key={item.ad}>
                 {index > 0 && ' ve '}
-                <span className="font-semibold text-[#1C2128]">%{item.deger}&apos;u {item.ad.toLowerCase()}</span>
+                <span className="font-semibold text-[#1C2128]">%{item.deger}&apos;ü {item.ad.toLowerCase()}</span>
               </span>
             ))}{' '}
-            duzeyinde etki tespit edildi.
+            düzeyinde etki tespit edildi.
           </p>
         )}
 
@@ -520,8 +535,8 @@ export default function Analytics({ data }) {
         <p className="text-[11px] text-[#9CA3AF] mt-8 pt-4 border-t border-[#F0F1F3]">
           Analiz tarihi:{' '}
           {data.timestamp ? new Date(data.timestamp).toLocaleString('tr-TR') : '—'} · Bu
-          oranlar NDVI degisim analizi (bitki ortusu kaybi) ve kirlilik risk modeline
-          dayanmaktadir.
+          oranlar NDVI değişim analizi (bitki örtüsü kaybı) ve MODIS AOD ölçümüne
+          dayanmaktadır.
         </p>
       </div>
     </div>

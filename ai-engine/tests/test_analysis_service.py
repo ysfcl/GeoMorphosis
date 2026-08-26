@@ -49,7 +49,7 @@ def test_risk_level_never_exceeds_yuksek():
         ({"detected": True, "severity": "CRITICAL"}, "yuksek"),
     ],
 )
-def test_vegetation_loss_maps_to_fire_risk(deforestation, expected):
+def test_vegetation_loss_maps_to_deforestation_risk(deforestation, expected):
     assert analysis_service._risk_from_vegetation_loss(deforestation) == expected
 
 
@@ -86,8 +86,13 @@ def test_analyze_region_returns_full_contract_in_demo_mode(monkeypatch):
     assert result["region_name"] == "36.8530, 28.2715"
     assert result["ndvi_score"] == 0.0
     # Report/index.js bu alanlarda .toUpperCase() cagiriyor, None olmamali
-    assert result["fire_risk"] == "yok"
-    assert result["pollution_level"] == "yok"
+    assert result["deforestation_risk"] == "yok"
+    # AOD erisilemezse deterministik fallback devrede (0.05-0.35 bandi)
+    assert result["pollution_level"] in ("yok", "dusuk")
+    # Panel yuzde + ham AOD gosterebilmeli; alanlar her zaman mevcut
+    assert isinstance(result["deforestation_loss_percent"], float)
+    assert isinstance(result["deforestation_detections"], int)
+    assert result["pollution_aod"] is None or isinstance(result["pollution_aod"], float)
     assert result["status"]
     assert result["timestamp"]
     assert "yolo_detections" in result["ai_results"]
@@ -120,11 +125,11 @@ def test_analyze_region_derives_flat_fields_from_detections(monkeypatch, tmp_pat
         classmethod(
             lambda cls, path: {
                 "boxes": [
-                    {"class": "fire", "class_id": 0, "confidence": 0.82, "bbox": [1, 2, 3, 4]},
+                    {"class": "deforestation", "class_id": 0, "confidence": 0.82, "bbox": [1, 2, 3, 4]},
                     {"class": "pollution", "class_id": 1, "confidence": 0.45, "bbox": [5, 6, 7, 8]},
                 ],
                 "model_loaded": True,
-                "model_path": "models/fire_yolov8.pt",
+                "model_path": "models/deforestation_yolov8.pt",
             }
         ),
     )
@@ -135,10 +140,10 @@ def test_analyze_region_derives_flat_fields_from_detections(monkeypatch, tmp_pat
 
     assert result["region_name"] == "Bursa"
     assert result["model_loaded"] is True
-    assert result["fire_risk"] == "yuksek"
+    assert result["deforestation_risk"] == "yuksek"
     assert result["pollution_level"] == "orta"
     assert len(result["ai_results"]["yolo_detections"]) == 2
-    assert result["ai_results"]["yolo_detections"][0]["class"] == "fire"
+    assert result["ai_results"]["yolo_detections"][0]["class"] == "deforestation"
 
 
 def test_images_field_is_empty_in_demo_mode(monkeypatch):
@@ -277,126 +282,32 @@ def test_change_map_is_null_when_rendering_fails(monkeypatch, tmp_path):
     assert images["change_map"] is None
 
 
-# --- kirlilik kaplama yuzdesi ---
+# --- Kirlilik: AOD tabanli skor yardimcilari ---
 
-def _box(class_name, bbox, confidence=0.9):
-    return {"class": class_name, "confidence": confidence, "bbox": bbox}
+def test_pollution_score_from_aod_thresholds():
+    from services.analysis_service import _pollution_score_from_aod
 
-
-def test_coverage_is_zero_without_detections():
-    assert analysis_service._detection_coverage_percentage([], "pollution", 512) == 0.0
-
-
-def test_coverage_measures_the_box_area():
-    """256x256 kutu, 512x512 goruntunun dortte birini kaplar."""
-    detections = [_box("pollution", [0, 0, 256, 256])]
-
-    assert analysis_service._detection_coverage_percentage(
-        detections, "pollution", 512
-    ) == 25.0
+    assert _pollution_score_from_aod(None) is None
+    assert _pollution_score_from_aod(0.05) == 0.1
+    assert _pollution_score_from_aod(0.2) == 0.3
+    assert _pollution_score_from_aod(0.4) == 0.6
+    assert _pollution_score_from_aod(0.6) == 0.9
 
 
-def test_overlapping_boxes_are_counted_once():
-    """Kutu alanlari toplansaydi %50 cikardi; maske sayesinde %25 kaliyor."""
-    detections = [
-        _box("pollution", [0, 0, 256, 256]),
-        _box("pollution", [0, 0, 256, 256]),
-    ]
+def test_score_to_risk_mapping():
+    from services.analysis_service import _score_to_risk
 
-    assert analysis_service._detection_coverage_percentage(
-        detections, "pollution", 512
-    ) == 25.0
+    assert _score_to_risk(None) == "yok"
+    assert _score_to_risk(0.1) == "yok"
+    assert _score_to_risk(0.2) == "dusuk"
+    assert _score_to_risk(0.4) == "orta"
+    assert _score_to_risk(0.7) == "yuksek"
 
 
-def test_coverage_only_counts_the_requested_class():
-    detections = [
-        _box("pollution", [0, 0, 256, 256]),
-        _box("fire", [256, 256, 512, 512]),
-    ]
+def test_fallback_pollution_score_deterministic_and_capped():
+    from services.analysis_service import _fallback_pollution_score
 
-    assert analysis_service._detection_coverage_percentage(
-        detections, "pollution", 512
-    ) == 25.0
-
-
-def test_boxes_outside_the_frame_are_clipped():
-    """Tasmis kutu %100'u asmamali."""
-    detections = [_box("pollution", [-200, -200, 900, 900])]
-
-    assert analysis_service._detection_coverage_percentage(
-        detections, "pollution", 512
-    ) == 100.0
-
-
-def test_malformed_boxes_are_skipped():
-    detections = [_box("pollution", [1, 2]), _box("pollution", [10, 10, 10, 10])]
-
-    assert analysis_service._detection_coverage_percentage(
-        detections, "pollution", 512
-    ) == 0.0
-
-
-def test_pollution_block_reports_measurements(monkeypatch, tmp_path):
-    rgb, ndvi = tmp_path / "rgb.png", tmp_path / "ndvi.png"
-    rgb.write_bytes(b"x")
-    ndvi.write_bytes(b"x")
-
-    monkeypatch.setattr(
-        analysis_service,
-        "download_satellite_series",
-        lambda **kwargs: [
-            {
-                "year": 2025,
-                "status": "ok",
-                "path": str(rgb),
-                "image_path": str(rgb),
-                "rgb_path": str(rgb),
-                "ndvi_path": str(ndvi),
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        analysis_service.YoloService,
-        "predict",
-        classmethod(
-            lambda cls, path: {
-                "boxes": [
-                    {"class": "pollution", "class_id": 1, "confidence": 0.64, "bbox": [0, 0, 256, 256]},
-                ],
-                "model_loaded": True,
-            }
-        ),
-    )
-    monkeypatch.setattr(analysis_service, "_safe_ndvi", lambda path: None)
-
-    result = analysis_service.analyze_region(36.853, 28.2715)
-
-    assert result["pollution_percentage"] == 25.0
-    assert result["ai_results"]["pollution"] == {
-        "detected": True,
-        "coverage_percentage": 25.0,
-        "detection_count": 1,
-        "max_confidence": 0.64,
-    }
-
-
-def test_pollution_percentage_is_zero_in_demo_mode(monkeypatch):
-    monkeypatch.setattr(
-        analysis_service,
-        "download_satellite_series",
-        lambda **kwargs: [
-            {
-                "year": 2025,
-                "status": "demo",
-                "path": None,
-                "image_path": None,
-                "rgb_path": None,
-                "ndvi_path": None,
-            }
-        ],
-    )
-
-    result = analysis_service.analyze_region(36.853, 28.2715)
-
-    assert result["pollution_percentage"] == 0.0
-    assert result["ai_results"]["pollution"]["detected"] is False
+    first = _fallback_pollution_score(36.853, 28.2715)
+    second = _fallback_pollution_score(36.853, 28.2715)
+    assert first == second
+    assert 0.05 <= first <= 0.35

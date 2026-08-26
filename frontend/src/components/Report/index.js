@@ -1,62 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { jsPDF } from 'jspdf';
 import { FileText, Download, X, Loader2 } from 'lucide-react';
 import {
-  analysisImageUrl,
-  composeChangeMapDataUrl,
-  embedTurkishFont,
-  fetchTileDataUrl,
-} from '@/lib/pdfAssets';
+  buildAnalysisReportPdf,
+  readAnalysis,
+} from '@/lib/pdfReport';
 
-const RISK_LABELS = { yok: 'Yok', dusuk: 'Düşük', orta: 'Orta', yuksek: 'Yüksek' };
-const SEVERITY_LABELS = { CRITICAL: 'Kritik', HIGH: 'Yüksek', LOW: 'Düşük' };
-
-// A4: 210 x 297 mm
-const PAGE = { width: 210, height: 297, margin: 20 };
-const CONTENT_WIDTH = PAGE.width - PAGE.margin * 2;
-
-function riskLabel(value) {
-  if (!value) return 'Bilinmiyor';
-  return RISK_LABELS[String(value).toLowerCase()] ?? value;
-}
-
-function clampPercent(value) {
-  return Math.min(100, Math.max(0, Number(value) || 0));
-}
-
-/** Rapordaki tum degerleri tek yerden turetiyoruz; ekranla ayni kaynak. */
-function readAnalysis(data) {
-  const ai = data?.ai_results ?? {};
-  const deforestation = ai.change_detection?.deforestation ?? {};
-  const pollution = ai.pollution ?? {};
-  const metrics = ai.environmental_metrics ?? {};
-  const detections = ai.yolo_detections ?? [];
-
-  return {
-    regionName: data?.region_name || 'Bilinmeyen Bölge',
-    coordinates: data?.coordinates ?? null,
-    ndvi: data?.ndvi_score ?? 0,
-    ndviChange: metrics.ndvi_change ?? 0,
-    fireRisk: riskLabel(data?.fire_risk),
-    pollutionLevel: riskLabel(data?.pollution_level),
-    pollutionPercent: clampPercent(
-      data?.pollution_percentage ?? pollution.coverage_percentage
-    ),
-    // Onceki surum data.deforestation_risk okuyordu; sozlesmede boyle bir alan
-    // yok, bu yuzden raporda hep "N/A" yaziyordu.
-    deforestationSeverity: SEVERITY_LABELS[deforestation.severity] ?? 'Bilinmiyor',
-    deforestationPercent: deforestation.detected
-      ? clampPercent(deforestation.loss_percentage)
-      : 0,
-    detectionCount: detections.length,
-    demoMode: Boolean(data?.demo_mode),
-    modelLoaded: data?.model_loaded !== false,
-    images: data?.images ?? null,
-    timestamp: data?.timestamp,
-  };
-}
+// PDF uretim mantigi lib/pdfReport.js'te yasiyor; e-posta eki de AYNI
+// fonksiyonu kullanir, boylece iki cikti birebir aynidir.
 
 export default function Report({ data }) {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -69,98 +21,7 @@ export default function Report({ data }) {
     setIsGenerating(true);
 
     try {
-      const doc = new jsPDF();
-      const hasFont = await embedTurkishFont(doc);
-      const font = hasFont ? 'Roboto' : 'helvetica';
-
-      // --- Sayfa 1: ozet ---
-      doc.setFont(font, 'bold');
-      doc.setFontSize(20);
-      doc.setTextColor(22, 163, 74);
-      doc.text('GeoMorphosis Analiz Raporu', PAGE.margin, 28);
-
-      doc.setDrawColor(229, 231, 235);
-      doc.line(PAGE.margin, 33, PAGE.width - PAGE.margin, 33);
-
-      doc.setFont(font, 'normal');
-      doc.setFontSize(11);
-      doc.setTextColor(107, 114, 128);
-
-      const generatedAt = analysis.timestamp
-        ? new Date(analysis.timestamp).toLocaleString('tr-TR')
-        : new Date().toLocaleString('tr-TR');
-
-      doc.text(`Bölge: ${analysis.regionName}`, PAGE.margin, 42);
-      doc.text(`Rapor tarihi: ${generatedAt}`, PAGE.margin, 48);
-
-      if (analysis.coordinates) {
-        const { lat, lon, buffer_meters: buffer } = analysis.coordinates;
-        const coordText =
-          typeof lat === 'number' && typeof lon === 'number'
-            ? `Koordinat: ${lat.toFixed(4)}, ${lon.toFixed(4)} · Tampon: ${buffer} m`
-            : `Tampon: ${buffer} m`;
-        doc.text(coordText, PAGE.margin, 54);
-      }
-
-      // Olcum tablosu
-      const rows = [
-        ['NDVI skoru', String(analysis.ndvi)],
-        ['NDVI değişimi', `${analysis.ndviChange > 0 ? '+' : ''}${analysis.ndviChange}`],
-        ['Yangın riski', analysis.fireRisk],
-        ['Kirlilik alanı', `%${analysis.pollutionPercent} (${analysis.pollutionLevel})`],
-        [
-          'Bitki örtüsü kaybı',
-          `%${analysis.deforestationPercent} (${analysis.deforestationSeverity})`,
-        ],
-        ['Model tespiti', `${analysis.detectionCount} adet`],
-      ];
-
-      let y = 66;
-      doc.setFontSize(12);
-      doc.setFont(font, 'bold');
-      doc.setTextColor(28, 33, 40);
-      doc.text('Model Sonuçları', PAGE.margin, y);
-      y += 8;
-
-      doc.setFontSize(11);
-      rows.forEach(([label, value]) => {
-        doc.setFont(font, 'normal');
-        doc.setTextColor(107, 114, 128);
-        doc.text(label, PAGE.margin, y);
-        doc.setFont(font, 'bold');
-        doc.setTextColor(28, 33, 40);
-        doc.text(value, PAGE.margin + 70, y);
-        doc.setDrawColor(240, 241, 243);
-        doc.line(PAGE.margin, y + 2.5, PAGE.width - PAGE.margin, y + 2.5);
-        y += 10;
-      });
-
-      // Verinin nereden geldigi konusunda seffaf ol
-      y += 4;
-      doc.setFont(font, 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(156, 163, 175);
-
-      if (analysis.demoMode) {
-        doc.text(
-          'Uyarı: Uydu verisi alınamadığı için değerler demo modunda üretilmiştir.',
-          PAGE.margin,
-          y
-        );
-        y += 5;
-      }
-      if (!analysis.modelLoaded) {
-        doc.text(
-          'Uyarı: Nesne tespit modeli yüklenemedi; risk değerleri yalnızca NDVI değişimine dayanıyor.',
-          PAGE.margin,
-          y
-        );
-      }
-
-      // --- Sayfa 2: uydu goruntuleri ---
-      await appendImagery(doc, font, analysis);
-
-      addFooter(doc, font);
+      const doc = await buildAnalysisReportPdf(data);
       doc.save(`geomorphosis-rapor-${Date.now()}.pdf`);
     } catch (error) {
       console.error('PDF üretilemedi:', error);
@@ -182,7 +43,7 @@ export default function Report({ data }) {
       {/* Önizleme Modal'ı */}
       {isPreviewOpen && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto flex flex-col">
 
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -202,16 +63,20 @@ export default function Report({ data }) {
                 <PreviewRow label="Bölge" value={analysis.regionName} />
                 <PreviewRow label="NDVI Skoru" value={analysis.ndvi} valueClass="text-green-600" />
                 <PreviewRow
-                  label="Bitki Örtüsü Kaybı"
-                  value={`%${analysis.deforestationPercent}`}
+                  label="Ormansızlaşma"
+                  value={`${analysis.deforestationRisk} (%${analysis.deforestationPercent})`}
                   valueClass="text-orange-600"
                 />
                 <PreviewRow
-                  label="Kirlilik Alanı"
-                  value={`%${analysis.pollutionPercent}`}
+                  label="Kirlilik"
+                  value={
+                    analysis.pollutionLevel +
+                    (analysis.pollutionAod != null
+                      ? ` · AOD ${analysis.pollutionAod.toFixed(2)}`
+                      : '')
+                  }
                   valueClass="text-yellow-600"
                 />
-                <PreviewRow label="Yangın Riski" value={analysis.fireRisk} valueClass="text-red-600" />
                 <PreviewRow
                   label="Uydu Görüntüsü"
                   value={analysis.images?.available ? 'Rapora eklenecek' : 'Yok'}
@@ -260,102 +125,4 @@ function PreviewRow({ label, value, valueClass = 'text-gray-800', last = false }
       <span className={`font-semibold ${valueClass}`}>{value}</span>
     </div>
   );
-}
-
-/** Uydu goruntulerini ve degisim haritasini ikinci sayfaya ekler. */
-async function appendImagery(doc, font, analysis) {
-  const images = analysis.images;
-  const coords = analysis.coordinates;
-
-  if (
-    !images?.available ||
-    !coords ||
-    !Array.isArray(images.years) ||
-    images.years.length === 0
-  ) {
-    return;
-  }
-
-  const url = (year, kind) =>
-    analysisImageUrl({ lat: coords.lat, lon: coords.lon, year, kind });
-
-  const firstYear = images.years[0];
-  const lastYear = images.years[images.years.length - 1];
-
-  const [beforeTile, afterTile, changeMap] = await Promise.all([
-    fetchTileDataUrl(url(firstYear, 'rgb')),
-    fetchTileDataUrl(url(lastYear, 'rgb')),
-    images.change_map
-      ? composeChangeMapDataUrl(url(lastYear, 'rgb'), url(null, 'diff'))
-      : Promise.resolve(null),
-  ]);
-
-  if (!beforeTile && !afterTile && !changeMap) return;
-
-  doc.addPage();
-  doc.setFont(font, 'bold');
-  doc.setFontSize(16);
-  doc.setTextColor(28, 33, 40);
-  doc.text('Uydu Görüntüsü Karşılaştırması', PAGE.margin, 28);
-
-  // Yan yana yerlesim: arayuzdeki kaydiracin PDF karsiligi
-  const gap = 6;
-  const tileSize = (CONTENT_WIDTH - gap) / 2;
-  let y = 36;
-
-  doc.setFont(font, 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(107, 114, 128);
-  doc.text(String(firstYear), PAGE.margin, y);
-  doc.text(String(lastYear), PAGE.margin + tileSize + gap, y);
-  y += 3;
-
-  if (beforeTile) {
-    doc.addImage(beforeTile, 'JPEG', PAGE.margin, y, tileSize, tileSize);
-  }
-  if (afterTile) {
-    doc.addImage(afterTile, 'JPEG', PAGE.margin + tileSize + gap, y, tileSize, tileSize);
-  }
-  y += tileSize + 12;
-
-  if (changeMap) {
-    doc.setFont(font, 'bold');
-    doc.setFontSize(14);
-    doc.setTextColor(28, 33, 40);
-    doc.text('Değişim Haritası', PAGE.margin, y);
-    y += 6;
-
-    doc.setFont(font, 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(107, 114, 128);
-    doc.text(
-      `${images.change_map.from_year}-${images.change_map.to_year} arası NDVI farkı · ` +
-        'kırmızı: bitki kaybı, yeşil: artış',
-      PAGE.margin,
-      y
-    );
-    y += 4;
-
-    const mapSize = Math.min(tileSize * 1.4, PAGE.height - y - 25);
-    doc.addImage(changeMap, 'JPEG', PAGE.margin, y, mapSize, mapSize);
-  }
-}
-
-function addFooter(doc, font) {
-  const pageCount = doc.getNumberOfPages();
-
-  for (let page = 1; page <= pageCount; page += 1) {
-    doc.setPage(page);
-    doc.setFont(font, 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(156, 163, 175);
-    doc.text(
-      'Bu rapor GeoMorphosis AI Engine tarafından otomatik üretilmiştir.',
-      PAGE.margin,
-      PAGE.height - 12
-    );
-    doc.text(`${page} / ${pageCount}`, PAGE.width - PAGE.margin, PAGE.height - 12, {
-      align: 'right',
-    });
-  }
 }

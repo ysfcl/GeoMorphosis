@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import ImageCompare from '@/components/ImageCompare';
-import DetectionOverlay from '@/components/DetectionOverlay';
 
 // FastAPI /images endpoint'ine next.config.js'teki /api/ai/:path* rewrite'i
 // uzerinden gidiyoruz; boylece CORS ve ek port acma ihtiyaci yok.
@@ -27,10 +26,8 @@ export default function RegionImagery({ data }) {
 
   const images = data?.images;
   const coordinates = data?.coordinates;
-  const detections = data?.ai_results?.yolo_detections ?? [];
 
   const years = images?.years ?? [];
-  const size = images?.size ?? 512;
   const changeMap = images?.change_map ?? null;
   const hasCoordinates =
     typeof coordinates?.lat === 'number' && typeof coordinates?.lon === 'number';
@@ -57,7 +54,6 @@ export default function RegionImagery({ data }) {
             onError={() => setFailed(true)}
             className="absolute inset-0 w-full h-full object-cover"
           />
-          <DetectionOverlay detections={detections} size={size} />
           <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/60 text-white text-sm font-semibold">
             {lastYear}
           </span>
@@ -72,10 +68,7 @@ export default function RegionImagery({ data }) {
         beforeLabel={String(firstYear)}
         afterLabel={String(lastYear)}
         onError={() => setFailed(true)}
-      >
-        {/* Tespitler son yilin goruntusu uzerinde calisti */}
-        <DetectionOverlay detections={detections} size={size} />
-      </ImageCompare>
+      />
     );
   };
 
@@ -173,7 +166,6 @@ export default function RegionImagery({ data }) {
           {years.length >= 2
             ? 'Ortadaki tutamağı sürükleyerek iki yılı karşılaştırın.'
             : 'Karşılaştırma için en az iki yıla ait görüntü gerekiyor.'}
-          {detections.length > 0 && ` Kutular modelin ${lastYear} görüntüsünde tespit ettiği alanları gösteriyor.`}
         </p>
       )}
     </div>

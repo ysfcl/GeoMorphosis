@@ -26,14 +26,14 @@ test('extractCoordinates returns null when no usable point exists', () => {
   assert.equal(extractCoordinates({ start_points: [{ foo: 1 }] }), null);
 });
 
-test('shouldAlert triggers on high fire risk', () => {
-  assert.equal(shouldAlert({ fire_risk: 'yuksek' }), true);
-  assert.equal(shouldAlert({ fire_risk: 'orta' }), false);
+test('shouldAlert triggers on high deforestation risk', () => {
+  assert.equal(shouldAlert({ deforestation_risk: 'yuksek' }), true);
+  assert.equal(shouldAlert({ deforestation_risk: 'orta' }), false);
 });
 
 test('shouldAlert triggers on critical vegetation loss', () => {
   const result = {
-    fire_risk: 'dusuk',
+    deforestation_risk: 'dusuk',
     ai_results: { change_detection: { deforestation: { severity: 'CRITICAL' } } }
   };
 
@@ -42,7 +42,7 @@ test('shouldAlert triggers on critical vegetation loss', () => {
 
 test('shouldAlert stays quiet for a normal result', () => {
   const result = {
-    fire_risk: 'yok',
+    deforestation_risk: 'yok',
     pollution_level: 'yok',
     ai_results: { change_detection: { deforestation: { severity: 'LOW' } } }
   };

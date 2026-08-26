@@ -5,17 +5,24 @@ AI_ENGINE_DIR = Path(__file__).resolve().parent.parent
 
 # Agirlik arama sirasi: fine-tune edilmis modeller once, en sonda pretrained nano.
 # best.pt ultralytics egitiminin dogrudan ciktisi (runs/detect/*/weights/best.pt);
-# train.py ise kopyaladigi dosyayi fire_yolov8_v2.pt olarak adlandiriyor.
+# train.py ise kopyaladigi dosyayi deforestation_yolov8_v2.pt olarak adlandiriyor.
 CANDIDATE_WEIGHTS = [
     AI_ENGINE_DIR / "models" / "best.pt",
-    AI_ENGINE_DIR / "models" / "fire_yolov8_v2.pt",
-    AI_ENGINE_DIR / "models" / "fire_yolov8.pt",
+    AI_ENGINE_DIR / "models" / "deforestation_yolov8_v2.pt",
+    AI_ENGINE_DIR / "models" / "deforestation_yolov8.pt",
     AI_ENGINE_DIR / "yolov8n.pt",
 ]
 
 # prepare_yolo_dataset.py CLASSES ile ayni sira; model kendi isimlerini
 # bildirmezse bu liste yedek olarak kullanilir.
-FALLBACK_CLASS_NAMES = ["fire", "pollution"]
+FALLBACK_CLASS_NAMES = ["deforestation", "pollution"]
+
+# best.pt egitimi sirasinda siniflara "fire" adi verilmisti; API sozlesmesi
+# artik deforestation kullaniyor. Agirligi yeniden egitmeden isimler okuma
+# aninda bu esleme ile duzeltilir. NOT: model.names'e YAZILMAZ - yeni
+# ultralytics surumlerinde salt-okunur property ve yazmak model yuklemesini
+# kiriyordu ("property 'names' of 'YOLO' object has no setter").
+CLASS_NAME_ALIASES = {"fire": "deforestation"}
 
 CONFIDENCE_THRESHOLD = float(os.environ.get("YOLO_CONF_THRESHOLD", "0.25"))
 
@@ -81,15 +88,23 @@ class YoloService:
 
     @classmethod
     def class_name(cls, class_id: int) -> str:
-        """Sinif id'sini okunabilir isme cevirir (frontend ham int ile calisamaz)."""
+        """Sinif id'sini okunabilir isme cevirir (frontend ham int ile calisamaz).
+
+        Eski egitimden kalan adlar (orn. "fire") burada guncel sozlesmeye
+        cevrilir; model nesnesi hicbir sekilde degistirilmez.
+        """
+        raw = None
         names = getattr(cls.model, "names", None)
         if isinstance(names, dict):
-            return str(names.get(class_id, class_id))
-        if isinstance(names, (list, tuple)) and 0 <= class_id < len(names):
-            return str(names[class_id])
-        if 0 <= class_id < len(FALLBACK_CLASS_NAMES):
-            return FALLBACK_CLASS_NAMES[class_id]
-        return str(class_id)
+            raw = names.get(class_id, class_id)
+        elif isinstance(names, (list, tuple)) and 0 <= class_id < len(names):
+            raw = names[class_id]
+        elif 0 <= class_id < len(FALLBACK_CLASS_NAMES):
+            raw = FALLBACK_CLASS_NAMES[class_id]
+        else:
+            raw = str(class_id)
+
+        return CLASS_NAME_ALIASES.get(str(raw), str(raw))
 
     @classmethod
     def predict(cls, image_path: str) -> dict:

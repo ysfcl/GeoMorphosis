@@ -51,10 +51,11 @@ data/cache/*
 
 # runtime logs
 ai-engine/data/*.log
-
-# models
-# Egitilmis agirliklar (ai-engine/models/*.pt) bilerek repoda tutuluyor;
-# ekibin modeli calistirabilmesi icin gerekli.
+ai-engine/data/*.pt
+# Egitilmis agirliklar buyuk oldugu icin repoda tutulmuyor (100MB GitHub limiti).
+# last.pt yerel olarak ai-engine/models/ altinda kalir, push edilmez.
+ai-engine/models/last.pt
+ai-engine/models/geomorphosis-rapor-*.pdf
 ai-engine/Mehmet-yolo/
 
 # Ultralytics'in otomatik indirdigi pretrained agirliklar - repoda tutulmamali,

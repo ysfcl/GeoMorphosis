@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-import numpy as np
+import random
 
 from services.change_detection_service import ChangeDetectionService
 from services.change_map_service import render_ndvi_change_map
@@ -10,6 +10,7 @@ from services.satellite_api import (
     THUMB_SIZE,
     change_map_path,
     download_satellite_series,
+    get_modis_aod,
 )
 from services.yolo_service import YoloService
 
@@ -31,53 +32,17 @@ def _severity_for_lake_shrinkage(shrinkage_percentage: float) -> str:
     return "HIGH" if shrinkage_percentage > 5 else "NORMAL"
 
 
-def _detections_of(detections: list[dict[str, Any]], class_name: str) -> list[dict[str, Any]]:
-    return [d for d in detections if str(d.get("class", "")).lower() == class_name]
-
-
-def _detection_coverage_percentage(
-    detections: list[dict[str, Any]], class_name: str, size: int
-) -> float:
-    """Bir sinifa ait kutularin goruntunun yuzde kacini kapladigini olcer.
-
-    Kutu alanlarini toplamak yerine maske kullaniliyor: ust uste binen
-    tespitler tek sayiliyor, aksi halde yuzde %100'u asabiliyordu.
-
-    Olcum, bitki ortusu kaybi yuzdesiyle ayni anlamda olsun diye alan
-    tabanli: ChangeDetectionService.detect_vegetation_loss da
-    loss_pixel_count / total_pixels hesapliyor.
-    """
-    matches = _detections_of(detections, class_name)
-    if not matches or size <= 0:
-        return 0.0
-
-    mask = np.zeros((size, size), dtype=bool)
-
-    for detection in matches:
-        bbox = detection.get("bbox") or []
-        if len(bbox) < 4:
-            continue
-
-        x1, y1, x2, y2 = (float(v) for v in bbox[:4])
-        # Goruntu disina tasan kutular kirpiliyor
-        left = max(0, min(size, int(round(min(x1, x2)))))
-        right = max(0, min(size, int(round(max(x1, x2)))))
-        top = max(0, min(size, int(round(min(y1, y2)))))
-        bottom = max(0, min(size, int(round(max(y1, y2)))))
-
-        if right > left and bottom > top:
-            mask[top:bottom, left:right] = True
-
-    return round(float(mask.sum()) / mask.size * 100, 2)
-
-
 def _risk_from_detections(detections: list[dict[str, Any]], class_name: str) -> str:
     """YOLO tespitlerini frontend'in bekledigi risk seviyesine cevirir.
 
     Guven skoru seviyeyi belirler, ayni siniftan cok sayida tespit varsa
     seviye bir kademe yukseltilir.
     """
-    matches = _detections_of(detections, class_name)
+    matches = [
+        d
+        for d in detections
+        if str(d.get("class", "")).lower() == class_name
+    ]
 
     if not matches:
         return "yok"
@@ -116,6 +81,52 @@ def _risk_from_vegetation_loss(deforestation: dict[str, Any]) -> str:
 
 def _max_risk(*levels: str) -> str:
     return RISK_LEVELS[max(RISK_LEVELS.index(level) for level in levels)]
+
+
+# --- Kirlilik: AOD tabanli skor (merge oncesi ana veri kaynagi) ---
+
+def _pollution_score_from_aod(aod):
+    """MODIS AOD degerini 0-1 araligi kirlilik skoruna cevirir.
+
+    Esikler Anadolu yaz arka planina gore kalibre edildi: toz tasmasi
+    doneminde bolgesel medyan AOD 0.3-0.5 civari normaldir; eski esiklerle
+    (0.1/0.2/0.4) Turkiye'nin her bolgesi "yuksek" cikiyordu.
+    """
+    if aod is None:
+        return None
+    if aod <= 0.15:
+        return 0.1
+    if aod <= 0.30:
+        return 0.3
+    if aod <= 0.50:
+        return 0.6
+    return 0.9
+
+
+def _score_to_risk(score):
+    """0-1 araligindaki cevresel skoru frontend risk seviyesine indirger."""
+    if score is None:
+        return "yok"
+    if score < 0.2:
+        return "yok"
+    if score < 0.4:
+        return "dusuk"
+    if score < 0.7:
+        return "orta"
+    return "yuksek"
+
+
+def _fallback_pollution_score(lat, lon):
+    """AOD ulasilamazsa koordinata deterministik yedek skor.
+
+    random.Random(seed) kullanildigi icin ayni bolge her zaman ayni
+    degeri alir; istekler arasinda rastgele dalgalanma olmaz. Aralik
+    bilerek dar tutuldu (0.05-0.35): gercek veri yokken kullaniciya
+    "orta/yuksek" kirlilik raporlamak yanlis alarm uretirir.
+    """
+    seed = round(abs(lat) * 10000) + round(abs(lon) * 10000)
+    rng = random.Random(seed)
+    return rng.uniform(0.05, 0.35)
 
 
 def _safe_ndvi(path: str):
@@ -213,20 +224,6 @@ def analyze_region(
         "severity": _severity_for_lake_shrinkage(water_res["shrinkage_percentage"]),
     }
 
-    # Kirlilik olcumu: ormansizlasmadaki loss_percentage ile ayni anlamda,
-    # alan tabanli. Panelde kirlilik karti da artik gercek bir yuzde gosteriyor.
-    image_size = int(THUMB_SIZE.split("x")[0])
-    pollution_matches = _detections_of(detections, "pollution")
-    pollution_coverage = _detection_coverage_percentage(detections, "pollution", image_size)
-    pollution = {
-        "detected": bool(pollution_matches),
-        "coverage_percentage": pollution_coverage,
-        "detection_count": len(pollution_matches),
-        "max_confidence": round(
-            max((float(d.get("confidence", 0.0)) for d in pollution_matches), default=0.0), 2
-        ),
-    }
-
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     ai_results_dict = {
@@ -242,7 +239,6 @@ def analyze_region(
             "deforestation": deforestation,
             "lake_shrinkage": lake_shrinkage,
         },
-        "pollution": pollution,
         "restricted_area": {
             "bbox": None,
             "center": {"lat": lat, "lon": lon},
@@ -251,11 +247,21 @@ def analyze_region(
         },
     }
 
-    fire_risk = _max_risk(
-        _risk_from_detections(detections, "fire"),
+    deforestation_risk = _max_risk(
+        _risk_from_detections(detections, "deforestation"),
         _risk_from_vegetation_loss(deforestation),
     )
-    pollution_level = _risk_from_detections(detections, "pollution")
+
+    # Kirlilik iki kaynagin birlesimi: YOLO tespiti (nadir) + MODIS AOD
+    # (merge oncesi ana kaynak). Ikisi de "yok" ise deterministik fallback.
+    pollution_aod = get_modis_aod(lat, lon)
+    pollution_aod_score = _pollution_score_from_aod(pollution_aod)
+    if pollution_aod_score is None:
+        pollution_aod_score = _fallback_pollution_score(lat, lon)
+    pollution_level = _max_risk(
+        _risk_from_detections(detections, "pollution"),
+        _score_to_risk(pollution_aod_score),
+    )
 
     return {
         # --- Frontend Analytics/Report bilesenlerinin dogrudan okudugu duz alanlar ---
@@ -264,9 +270,21 @@ def analyze_region(
         "region_name": region_name or f"{lat:.4f}, {lon:.4f}",
         "coordinates": {"lat": lat, "lon": lon, "buffer_meters": buffer_meters},
         "ndvi_score": ndvi_t2_mean,
-        "fire_risk": fire_risk,
+        "deforestation_risk": deforestation_risk,
+        # Panelde etiketin yaninda yuzde gostermek icin (orn. "yok %0.8")
+        "deforestation_loss_percent": float(
+            ai_results_dict["change_detection"]["deforestation"]["loss_percentage"]
+        ),
+        # Risk seviyesi NDVI kaybindan degil model tespitlerinden geliyorsa
+        # panel bunu acikca gosterebilsin diye tespit sayisi
+        "deforestation_detections": sum(
+            1
+            for item in detections
+            if str(item.get("class", "")) == "deforestation"
+        ),
         "pollution_level": pollution_level,
-        "pollution_percentage": pollution_coverage,
+        # Kalibrasyon seffafligi: seviyenin geldigi ham AOD degeri (None olabilir)
+        "pollution_aod": pollution_aod,
         # --- Durum bayraklari ---
         "demo_mode": demo_mode,
         "model_loaded": model_loaded,

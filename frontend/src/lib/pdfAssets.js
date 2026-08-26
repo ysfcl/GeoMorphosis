@@ -84,7 +84,8 @@ export async function fetchTileDataUrl(src) {
   if (!img) return null;
 
   const canvas = toCanvas(img.naturalWidth || 512, img.naturalHeight || 512);
-  const ctx = canvas.getContext('2d');
+  //const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   // JPEG saydamlik tasimadigi icin once beyaz zemin
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);

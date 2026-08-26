@@ -7,6 +7,7 @@ import Analytics from '@/components/Analytics';
 import Report from '@/components/Report';
 import { Mail, Send } from 'lucide-react';
 import { getUserId } from '@/lib/userId';
+import { saveLastReport, loadLastReport } from '@/lib/reportPayload';
 
 function RegionContent() {
   const searchParams = useSearchParams();
@@ -67,6 +68,8 @@ function RegionContent() {
           if (statusData.status === 'completed') {
             stopPolling(); // İş bitti, sormayı bırak
             setRegionData(statusData.result); // Analytics.js'i besleyecek veriyi state'e yaz
+            // Dogrulama sonrasi "ilk raporu gonder" akisi icin sakla
+            saveLastReport(statusData.result);
             setAnalysisStatus('success');
           } else if (statusData.status === 'failed') {
             stopPolling();
@@ -90,7 +93,10 @@ function RegionContent() {
         body: JSON.stringify({
           start_points: [{ lat, lon }],
           end_points: [], // Eğer bitiş noktası yoksa boş liste
-          buffer_meters: 1000
+          buffer_meters: 1000,
+          // Abone bildirimleri (e-posta/Telegram) bu kimlik uzerinden
+          // eslesiyor; gonderilmezse worker bildirimi sessizce atlar.
+          user_id: getUserId()
         })
       });
 
@@ -166,10 +172,17 @@ function RegionContent() {
     setNotifBusy(true);
     setNotifMessage('');
     try {
-      const res = await fetch('/api/notify/email/verify', {
+      // /api/verify dogrulamayi yapip son analiz raporunu PDF ekiyle gonderir
+      // (ana sayfadaki ayni sozlesme). /api/notify/email/verify ise sadece
+      // kaydi isaretliyor, rapor gondermiyordu.
+      const res = await fetch('/api/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: getUserId(), code: notifCode }),
+        body: JSON.stringify({
+          user_id: getUserId(),
+          code: notifCode,
+          report: loadLastReport(),
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
