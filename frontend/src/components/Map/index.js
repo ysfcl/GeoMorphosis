@@ -163,11 +163,11 @@ export default function Map({ onRegionSelect, isDarkMode }) {
       }
 
       // ----------------------------------------------------
+      const defaultZoom = typeof window !== 'undefined' && window.innerWidth < 769 ? 4 : 6;
 
       const map = L.map(mapRef.current, {
         zoomControl: false
-      }).setView([39.0, 35.0], 6);
-
+      }).setView([39.0, 35.0], defaultZoom);
       L.control
         .zoom({
           position: 'bottomleft'
