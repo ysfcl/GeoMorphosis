@@ -1,8 +1,36 @@
 import { NextResponse } from 'next/server';
 import { sendSystemTelegramNotification } from '@/lib/telegram';
+import Redis from 'ioredis';
+
+// Redis bağlantısını başlatıyoruz (Docker veya lokal ortam uyumlu)
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 export async function POST(request) {
   try {
+    // --- GÜVENLİK DUVARI: RATE LIMIT (HIZ SINIRLAYICI) ---
+    const ip = request.headers.get('x-forwarded-for') || 'bilinmeyen-ip';
+    const rateLimitKey = `rate_limit:${ip}`;
+    
+    // IP'nin bu dakikadaki istek sayısını 1 artır
+    // IP'nin bu dakikadaki istek sayısını 1 artır
+    const currentRequests = await redis.incr(rateLimitKey);
+    
+    if (currentRequests === 1) {
+      await redis.expire(rateLimitKey, 600); // Sayaç ömrü: 60 saniye
+    }
+    
+    if (currentRequests > 5) {
+      // REDIS'TEN KALAN SÜREYİ (SANİYE CİNSİNDEN) ÖĞRENİYORUZ
+      const timeLeft = await redis.ttl(rateLimitKey);
+      
+      // MESAJI DİNAMİK HALE GETİRİYORUZ
+      return NextResponse.json(
+        { error: `Sistem güvenliği: Çok fazla analiz isteği attınız. Lütfen ${timeLeft} saniye sonra tekrar deneyin.` },
+        { status: 429 }
+      );
+    }
+    // ----------------------------------------------------
+
     const body = await request.json();
 
     // DÜZELTME: Gelen body'den bbox verisini de çıkarıyoruz
@@ -80,28 +108,22 @@ export async function GET(request) {
   const taskId = searchParams.get('task_id');
 
   if (taskId) {
-  try {
-    const response = await fetch(`${aiEngineUrl}/api/status/${taskId}`);
+    try {
+      const response = await fetch(`${aiEngineUrl}/api/status/${taskId}`);
 
-    if (!response.ok) {
-      throw new Error(`AI Engine hata döndü: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`AI Engine hata döndü: ${response.status}`);
+      }
+
+      const statusData = await response.json();
+
+      return NextResponse.json(statusData);
+    } catch (error) {
+       return NextResponse.json({ error: 'Durum sorgulanamadı' }, { status: 500 });
     }
-
-    const statusData = await response.json();
-
-    // Abone bildirimleri buradan GONDERILMIYOR. Polling her uc saniyede bir
-    // calistigi ve 'completed' durumu birden fazla kez sorgulanabildigi icin
-    // (ana sayfa tamamlandi gorup durur, ardindan detay sayfasi ayni task_id ile
-    // yeniden sorgular) her sorguda tekrar mesaj gidiyordu. Ustelik kullanici
-    // sekmeyi kapattiginda hic gitmiyordu. Gonderimi worker devraldi:
-    // analiz bitince sunucu tarafinda, analiz basina bir kez.
-    return NextResponse.json(statusData);
-  } catch (error) {
-     return NextResponse.json({ error: 'Durum sorgulanamadı' }, { status: 500 });
   }
-}
 
-  // --- ESKİ SİSTEM GİBİ SADECE LAT/LON GELDİYSE (Geriye Dönük Uyumluluk İçin Korundu) ---
+  // --- ESKİ SİSTEM GİBİ SADECE LAT/LON GELDİYSE ---
   const lat = searchParams.get('lat');
   const lon = searchParams.get('lon');
 
