@@ -2,13 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sun, Moon, Send, Info, Bell, Mail, Monitor, X } from 'lucide-react';
+import { Sun, Moon, Send, Info, Bell, Mail, Monitor, X, Satellite, Zap, BarChart3, FileText, MapPin, BrainCircuit, BellRing } from 'lucide-react';
 import Map from '@/components/Map';
 import Toast from '@/components/Toast';
 import { getUserId } from '@/lib/userId';
 import { MAX_SELECTION_AREA_KM2 } from '@/lib/mapLimits';
+import { saveLastReport, loadLastReport } from '@/lib/reportPayload';
 
 const POLL_INTERVAL_MS = 3000;
+
+// Analiz ozet kartindaki risk seviyeleri icin Turkce etiketler
+const RISK_LABELS = {
+  yok: 'Yok',
+  normal: 'Normal',
+  dusuk: 'Düşük',
+  orta: 'Orta',
+  yuksek: 'Yüksek',
+};
 
 function resolveCoordinates(region) {
   if (!region) return null;
@@ -29,13 +39,6 @@ function resolveCoordinates(region) {
   return null;
 }
 
-const RISK_LABELS = {
-  yok: 'Yok',
-  dusuk: 'Düşük',
-  orta: 'Orta',
-  yuksek: 'Yüksek',
-};
-
 export default function Home() {
   const router = useRouter();
 
@@ -52,6 +55,9 @@ export default function Home() {
   const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
   const [notifEmail, setNotifEmail] = useState('');
   const [webPushStatus, setWebPushStatus] = useState(false);
+  // Dogrulama akisi: kayit sonrasi 6 haneli kod girme adimi
+  const [pendingVerify, setPendingVerify] = useState(false);
+  const [verifyCode, setVerifyCode] = useState('');
 
   const pollRef = useRef(null);
   const pollInFlightRef = useRef(false);
@@ -92,6 +98,8 @@ export default function Home() {
   stopPolling();
   setAnalysisResult(statusData.result || statusData);
   setLoading(false);
+  // Dogrulama sonrasi "ilk raporu hemen gonder" icin son sonucu sakla
+  saveLastReport(statusData.result || statusData);
   setToast({ type: 'success', title: 'Analiz Tamamlandı', message: 'Bölge analizi başarıyla sonuçlandı.' });
 
   // Analiz tamamlanınca otomatik olarak detay sayfasına yönlendir
@@ -169,7 +177,8 @@ export default function Home() {
     router.push(`/region?${params.toString()}`);
   };
 
-  // --- YENİ EKLENEN: E-POSTAYI ARKA PLANA (API'YE) GÖNDERME FONKSİYONU ---
+  // E-postayi /api/subscribe'a gonderir; SMTP calismiyorsa devCode ile
+  // dogrulama adimina gecer, calisiyorsa kodun mailde oldugunu soyler.
   const handleEmailSave = async () => {
     if (!notifEmail || !notifEmail.includes('@')) {
       setToast({ type: 'warning', title: 'Eksik Bilgi', message: 'Lütfen geçerli bir e-posta adresi girin.' });
@@ -180,20 +189,62 @@ export default function Home() {
       const res = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: notifEmail, 
+        body: JSON.stringify({
+          email: notifEmail,
           user_id: getUserId(),
-          notification_type: 'email' 
+          notification_type: 'email'
         }),
       });
 
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
-        setToast({ type: 'success', title: 'Bağlantı Başarılı', message: 'E-posta adresiniz sisteme başarıyla kaydedildi.' });
+        if (data.devCode) {
+          // Mail gitmediyse kodu ekranda gosterip dogrulama adimina gec
+          setVerifyCode(String(data.devCode));
+          setPendingVerify(true);
+          setToast({ type: 'info', title: 'Doğrulama Gerekli', message: `SMTP ayarlanmadı; doğrulama kodun: ${data.devCode}` });
+        } else {
+          setPendingVerify(true);
+          setVerifyCode('');
+          setToast({ type: 'success', title: 'Kod Gönderildi', message: 'E-postana 6 haneli doğrulama kodu gönderildi.' });
+        }
       } else {
-        setToast({ type: 'danger', title: 'Hata', message: 'Sisteme kaydedilirken bir sorun oluştu.' });
+        setToast({ type: 'danger', title: 'Hata', message: data.error || 'Sisteme kaydedilirken bir sorun oluştu.' });
       }
     } catch (err) {
       console.error('E-posta kayıt hatası:', err);
+      setToast({ type: 'danger', title: 'Bağlantı Hatası', message: 'Sunucuya ulaşılamadı.' });
+    }
+  };
+
+  // Dogrulama adimi: 6 haneli kod /api/verify'a gonderilir; yaninda son
+  // analiz raporu da tasinir, boylece dogrulama bitince PDF hemen gider.
+  const handleVerifyCode = async () => {
+    try {
+      const res = await fetch('/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: getUserId(), code: verifyCode, report: loadLastReport() }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        setPendingVerify(false);
+        setVerifyCode('');
+        setNotifEmail('');
+        setIsNotifModalOpen(false);
+        setToast({
+          type: data.emailSent ? 'success' : 'info',
+          title: 'Doğrulandı ✓',
+          message: data.message || 'Analiz raporları e-postanıza gönderilecek.',
+        });
+      } else {
+        setToast({ type: 'danger', title: 'Hatalı Kod', message: data.error || 'Doğrulama kodu geçersiz.' });
+      }
+    } catch (err) {
+      console.error('Dogrulama hatasi:', err);
       setToast({ type: 'danger', title: 'Bağlantı Hatası', message: 'Sunucuya ulaşılamadı.' });
     }
   };
@@ -213,7 +264,7 @@ export default function Home() {
         <div className="h-full px-3 sm:px-6 md:px-8 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2 sm:gap-3 md:gap-4 group cursor-pointer decoration-transparent">
             <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg transition-transform duration-300 ease-out group-hover:scale-110 group-hover:-rotate-3 group-active:scale-95">
-              <img src="logo.png" alt="Logo" className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" />
+              <img src="world.jpg" alt="Logo" className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" />
             </div>
             <div>
               <h1 className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white transition-colors duration-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">GeoMorphosis</h1>
@@ -261,14 +312,14 @@ export default function Home() {
       </nav>
 
       {panelOpen && (
-        <div className="absolute top-28 left-4 right-4 sm:left-auto sm:right-4 sm:w-96 z-[1000] max-h-[calc(100vh-8rem)] overflow-y-auto">
-          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-3xl shadow-2xl p-8 flex flex-col gap-6 transition-colors duration-300">
-            <h2 className="text-3xl font-bold dark:text-white">Analizi Başlat</h2>
+        <div className="absolute top-[4.5rem] left-3 right-3 sm:top-28 sm:right-4 sm:left-auto z-[1000] w-full sm:w-96 max-h-[calc(100vh-8rem)] overflow-y-auto">
+          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-3xl shadow-2xl p-5 sm:p-8 flex flex-col gap-4 sm:gap-6 transition-colors duration-300">
+            <h2 className="text-xl sm:text-3xl font-bold dark:text-white">Analizi Başlat</h2>
 
             {selectedRegion ? (
               <>
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-6">
-                  <h3 className="text-xl font-semibold mb-4 dark:text-white">Seçilen Alan / Koordinatlar</h3>
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-4 sm:p-6">
+                  <h3 className="text-base sm:text-xl font-semibold mb-3 sm:mb-4 dark:text-white">Seçilen Alan / Koordinatlar</h3>
                   
                   {/* Yeni şık koordinat görünümü */}
                   {resolveCoordinates(selectedRegion) && (
@@ -313,9 +364,9 @@ export default function Home() {
                   )}
                 </div>
 
-                <div className="flex gap-3">
-                  <button onClick={handleAnalyze} disabled={loading} className="flex-1 bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700 transition">Analiz Başlat</button>
-                  <button onClick={handleDetail} className="flex-1 bg-gray-200 dark:bg-gray-700 dark:text-white rounded-xl py-3 font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition">Detay</button>
+                <div className="flex gap-2 sm:gap-3">
+                  <button onClick={handleAnalyze} disabled={loading} className="flex-1 bg-blue-600 text-white rounded-xl py-2.5 text-sm sm:py-3 sm:text-base font-semibold hover:bg-blue-700 transition">Analiz Başlat</button>
+                  <button onClick={handleDetail} className="flex-1 bg-gray-200 dark:bg-gray-700 dark:text-white rounded-xl py-2.5 text-sm sm:py-3 sm:text-base font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition">Detay</button>
                 </div>
               </>
             ) : (
@@ -349,21 +400,55 @@ export default function Home() {
                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">
                   <Mail size={16} /> E-Posta Bildirimleri
                 </label>
-                <div className="flex gap-2">
-                  <input 
-                    type="email" 
-                    value={notifEmail} 
-                    onChange={e => setNotifEmail(e.target.value)} 
-                    placeholder="ornek@email.com" 
-                    className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm outline-none focus:border-blue-500 dark:text-white transition" 
-                  />
-                  <button 
-                    onClick={handleEmailSave} 
-                    className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition"
-                  >
-                    Kaydet
-                  </button>
-                </div>
+                {pendingVerify ? (
+                  /* 2. ADIM: dogrulama kodu girisi */
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <strong>{notifEmail}</strong> adresine gönderilen 6 haneli kodu gir.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={verifyCode}
+                        onChange={e => setVerifyCode(e.target.value.replace(/\D/g, ''))}
+                        placeholder="______"
+                        className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-lg font-mono tracking-[0.4em] text-center outline-none focus:border-blue-500 dark:text-white transition"
+                      />
+                      <button
+                        onClick={handleVerifyCode}
+                        disabled={!verifyCode || verifyCode.length < 6}
+                        className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-green-700 transition disabled:opacity-40"
+                      >
+                        Doğrula
+                      </button>
+                      <button
+                        onClick={() => setPendingVerify(false)}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 px-2 text-sm transition"
+                      >
+                        Geri
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* 1. ADIM: e-posta kaydi */
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={notifEmail}
+                      onChange={e => setNotifEmail(e.target.value)}
+                      placeholder="ornek@email.com"
+                      className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm outline-none focus:border-blue-500 dark:text-white transition"
+                    />
+                    <button
+                      onClick={handleEmailSave}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition"
+                    >
+                      Kaydet
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* 2. Telegram Formu */}
@@ -408,47 +493,92 @@ export default function Home() {
           </div>
         </div>
       )}
-            {isAboutOpen && (
-  <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-    <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-gray-100 dark:border-gray-700">
-      
-      <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700">
-        <h3 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-          <Info className="text-purple-600 dark:text-purple-400" size={24} />
-          GeoMorphosis Hakkında
-        </h3>
-        <button onClick={() => setIsAboutOpen(false)} className="text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded-full transition-colors">
-          <X size={20} />
-        </button>
-      </div>
-
-      <div className="p-6 space-y-4 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-        <p>
-          <strong className="text-gray-900 dark:text-white">GeoMorphosis</strong>, uydu görüntüleri ve yapay zekâ algoritmaları kullanarak çevresel değişimleri, ormansızlaşma risklerini ve ekolojik kirliliği izleyen kapsamlı bir platformdur.
-        </p>
-        <p>
-          Kullanıcılar harita üzerinde diledikleri bölgeyi seçerek güncel uydu verilerine erişebilir, alan analizi gerçekleştirebilir ve olası risk durumlarına karşı e-posta veya Telegram bildirimleri alabilir.
-        </p>
-      </div>
-
-      <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-end">
-        <button 
-          onClick={() => setIsAboutOpen(false)} 
-          className="bg-gray-900 dark:bg-gray-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-black dark:hover:bg-gray-600 transition"
-        >
-          Kapat
-        </button>
-      </div>
-
-    </div>
-  </div>
-      )}
-
       {loading && taskId && (
         <div className="absolute bottom-8 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[1000]">
           <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-5">
             <p className="text-blue-700 dark:text-blue-400 font-semibold animate-pulse">Yapay zekâ bölgeyi işliyor...</p>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 break-all">Fiş No: {taskId}</p>
+          </div>
+        </div>
+      )}
+
+      {isAboutOpen && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200" onClick={() => setIsAboutOpen(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
+
+            {/* HERO */}
+            <div className="relative bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 p-6 sm:p-10 text-white overflow-hidden">
+              <div className="absolute -top-16 -right-16 w-48 h-48 bg-white/10 rounded-full blur-2xl" />
+              <button onClick={() => setIsAboutOpen(false)} className="absolute top-4 right-4 p-2 rounded-full bg-white/15 hover:bg-white/25 transition">
+                <X size={18} />
+              </button>
+              <span className="inline-block px-3 py-1 rounded-full bg-white/20 text-[11px] font-bold tracking-widest uppercase mb-4">
+                Girişim · v1.0
+              </span>
+              <h2 className="text-2xl sm:text-4xl font-extrabold leading-tight">
+                GeoMorphosis
+              </h2>
+              <p className="mt-3 text-base sm:text-xl font-medium text-emerald-50">
+                Uydular bizim gözümüz, yapay zekâ bizim beynimiz.
+              </p>
+              <p className="mt-2 text-sm text-emerald-100/90 max-w-lg">
+                Türkiye'nin yeşil alanlarını uzaydan izleyen, ormansızlaşmayı ve hava kirliliğini yapay zekâyle tespit edip anında haber veren çevresel izleme platformu.
+              </p>
+            </div>
+
+            <div className="p-5 sm:p-8 space-y-8">
+
+              {/* DEGERLER */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                {[
+                  { icon: Satellite, title: 'Uzaydan İzleme', desc: 'Sentinel-2 & Landsat arşiviyle her noktayı 3 farklı yılda karşılaştırıyoruz.', color: 'text-sky-500', bg: 'bg-sky-50 dark:bg-sky-900/30' },
+                  { icon: BrainCircuit, title: 'Yapay Zekâ Analizi', desc: 'YOLOv8 modeli uydu görüntülerindeki ormansızlaşma izlerini tespit ediyor.', color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/30' },
+                  { icon: BellRing, title: 'Anlık Erken Uyarı', desc: 'Risk anında e-posta ve Telegram üzerinden saniyeler içinde bildiriyoruz.', color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/30' },
+                  { icon: FileText, title: 'PDF Raporlama', desc: 'Her analiz, ekinde otomatik üretilmiş şık bir PDF raporuyla geliyor.', color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/30' },
+                ].map(({ icon: Icon, title, desc, color, bg }) => (
+                  <div key={title} className={`${bg} rounded-2xl p-4 flex gap-3`}>
+                    <Icon size={22} className={`${color} shrink-0 mt-0.5`} />
+                    <div>
+                      <h3 className="font-bold text-gray-800 dark:text-white text-sm">{title}</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-300 mt-1 leading-relaxed">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* NASIL CALISIR */}
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4">Nasıl Çalışır?</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { step: '1', icon: MapPin, label: 'Bölge seç' },
+                    { step: '2', icon: Satellite, label: 'Veri iner' },
+                    { step: '3', icon: Zap, label: 'AI analiz eder' },
+                    { step: '4', icon: BarChart3, label: 'Rapor al' },
+                  ].map(({ step, icon: Icon, label }) => (
+                    <div key={step} className="flex flex-col items-center text-center gap-2 bg-gray-50 dark:bg-gray-900 rounded-2xl p-4">
+                      <span className="w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-bold flex items-center justify-center">{step}</span>
+                      <Icon size={20} className="text-gray-400" />
+                      <span className="text-xs font-medium text-gray-700 dark:text-gray-200">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ALTYAPI */}
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-3">Altyapı</h3>
+                <div className="flex flex-wrap gap-2">
+                  {['Next.js', 'FastAPI', 'YOLOv8', 'Google Earth Engine', 'MODIS AOD', 'Redis', 'Prisma'].map(t => (
+                    <span key={t} className="px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-xs font-medium text-gray-600 dark:text-gray-200">{t}</span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-700 text-center text-xs text-gray-400">
+                MIT Lisansı ile açık kaynak · geomorphosis.com.tr
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -10,6 +10,22 @@ RGB_BANDS = ["B4", "B3", "B2"]
 NIR_BAND = "B8"
 THUMB_SIZE = "512x512"
 
+# Guvenlik kilidi: istemciden gelen buffer degeri ne kadar buyuk olursa olsun
+# GEE sorgusu kotayi patlatmasin ve thumbnail sabit 512px kalsin.
+# 5000m -> en fazla 10km x 10km (100 km2) pencere islenir; varsayilan cizim
+# siniri 25 km2'nin rahat uzerinde bir tavan.
+MAX_BUFFER_METERS = int(os.environ.get("MAX_BUFFER_METERS", "5000"))
+MIN_BUFFER_METERS = 250
+
+
+def _clamp_buffer(buffer_meters):
+    """buffer_meters degerini guvenli araliga [250, MAX_BUFFER_METERS] sikistirir."""
+    try:
+        value = float(buffer_meters)
+    except (TypeError, ValueError):
+        return 1000
+    return int(min(MAX_BUFFER_METERS, max(MIN_BUFFER_METERS, value)))
+
 
 class EarthEngineError(Exception):
     pass
@@ -69,13 +85,28 @@ def _init_earth_engine():
         return
 
     try:
+        import base64
+        import tempfile
+
         import ee
 
         credentials_path = os.environ.get("GOOGLE_EARTH_ENGINE_CREDENTIALS")
+        # Bulut ortamlarinda (Railway vb.) dosya mount edilemediginden
+        # servis hesabi anahtari base64 ile env olarak tasinir.
+        credentials_b64 = os.environ.get("GOOGLE_EARTH_ENGINE_CREDENTIALS_B64")
         project_id = os.environ.get("GOOGLE_EARTH_ENGINE_PROJECT", "geomorphosis")
 
         if credentials_path and os.path.exists(credentials_path):
             creds = ee.ServiceAccountCredentials(None, credentials_path)
+            ee.Initialize(creds, project=project_id)
+        elif credentials_b64:
+            key_data = base64.b64decode(credentials_b64)
+            with tempfile.NamedTemporaryFile(
+                mode="wb", suffix=".json", delete=False
+            ) as key_file:
+                key_file.write(key_data)
+                tmp_key_path = key_file.name
+            creds = ee.ServiceAccountCredentials(None, tmp_key_path)
             ee.Initialize(creds, project=project_id)
         else:
             ee.Initialize(project=project_id)
@@ -89,6 +120,69 @@ def _init_earth_engine():
         _ee_available = False
         print(f"Earth Engine kullanilamiyor: {e}")
         print("Demo moduyla calisilacak")
+
+
+def _scale_maiac_aod(value):
+    """MAIAC MCD19A2 AOD ham degerini gercek birime cevirir.
+
+    GEE katalogunda Optical_Depth_047 bandinin olcegi 0.001'dir ve GEE
+    bunu OTOMATIK UYGULAMAZ. Ham degerler temiz havada bile 50-300 arasidir;
+    olceklenmeden esiklerle karsilastirilirsa her koordinat "yuksek" cikar.
+    """
+    return float(value) * 0.001
+
+
+def get_modis_aod(lat: float, lon: float, buffer_meters: int = 1000):
+    """Bolgenin son 30 gune ait MODIS AOD (Optical_Depth_047) medyanini doner.
+
+    Merge oncesi kirlilik hesabinin tek gercek veri kaynagi buydu; YOLO
+    tespitleri 2km'lik RGB tile'da kirlilik nesnesi nadiren yakaladigi icin
+    bu fonksiyon olmadan pollution_level surekli "yok" kaliyordu.
+
+    GEE kullanilamiyor veya bolgede granul yoksa None doner; cagiran taraf
+    deterministik fallback uygular.
+    """
+    buffer_meters = _clamp_buffer(buffer_meters)
+    _init_earth_engine()
+    if not _ee_available:
+        return None
+
+    import datetime
+
+    import ee
+
+    point = ee.Geometry.Point(lon, lat)
+    roi = point.buffer(buffer_meters).bounds()
+    today = datetime.date.today()
+    start = (today - datetime.timedelta(days=30)).isoformat()
+
+    try:
+        aod_coll = (
+            ee.ImageCollection("MODIS/061/MCD19A2_GRANULES")
+            .filterBounds(roi)
+            .filterDate(start, today.isoformat())
+            .select("Optical_Depth_047")
+        )
+        if aod_coll.size().getInfo() == 0:
+            return None
+        value = (
+            aod_coll.mean()
+            .reduceRegion(
+                reducer=ee.Reducer.median(),
+                geometry=roi,
+                scale=1000,
+                maxPixels=1e7,
+            )
+            .get("Optical_Depth_047")
+            .getInfo()
+        )
+        if value is not None:
+            aod = _scale_maiac_aod(value)
+            print(f"satellite_api: MODIS AOD ham={value} -> olcekli={aod}")
+            return aod
+    except Exception as e:
+        print(f"satellite_api: AOD sorgusu basarisiz: {e}")
+    return None
 
 
 def _empty_result(year, status, **extra):
@@ -139,6 +233,7 @@ def download_satellite_series(
     if years is None:
         years = [2020, 2023, 2025]
 
+    buffer_meters = _clamp_buffer(buffer_meters)
     _init_earth_engine()
 
     if not _ee_available:
@@ -233,6 +328,7 @@ def download_satellite_series(
 
 
 def get_latest_image(lat, lon, buffer_meters=1000):
+    buffer_meters = _clamp_buffer(buffer_meters)
     _init_earth_engine()
 
     if not _ee_available:

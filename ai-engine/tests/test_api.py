@@ -55,7 +55,7 @@ def test_internal_analyze_returns_the_full_contract(client):
         "timestamp",
         "region_name",
         "ndvi_score",
-        "fire_risk",
+        "deforestation_risk",
         "pollution_level",
         "demo_mode",
         "model_loaded",
@@ -63,7 +63,7 @@ def test_internal_analyze_returns_the_full_contract(client):
     ):
         assert key in body, f"sozlesmede eksik alan: {key}"
 
-    assert body["fire_risk"] in ("yok", "dusuk", "orta", "yuksek")
+    assert body["deforestation_risk"] in ("yok", "dusuk", "orta", "yuksek")
     assert body["pollution_level"] in ("yok", "dusuk", "orta", "yuksek")
     assert body["region_name"] == "36.8530, 28.2715"
 
@@ -128,13 +128,13 @@ def test_status_endpoint_parses_the_completed_result(client, monkeypatch):
     monkeypatch.setattr(
         main.r,
         "hgetall",
-        lambda key: {"status": "completed", "result": '{"fire_risk": "orta"}'},
+        lambda key: {"status": "completed", "result": '{"deforestation_risk": "orta"}'},
     )
 
     response = client.get("/api/status/abc")
 
     assert response.status_code == 200
-    assert response.json()["result"] == {"fire_risk": "orta"}
+    assert response.json()["result"] == {"deforestation_risk": "orta"}
 
 
 def test_status_endpoint_marks_unparsable_result_as_failed(client, monkeypatch):

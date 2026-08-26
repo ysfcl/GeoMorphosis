@@ -30,7 +30,6 @@ function clampPercent(value) {
 function readAnalysis(data) {
   const ai = data?.ai_results ?? {};
   const deforestation = ai.change_detection?.deforestation ?? {};
-  const pollution = ai.pollution ?? {};
   const metrics = ai.environmental_metrics ?? {};
   const detections = ai.yolo_detections ?? [];
 
@@ -39,17 +38,20 @@ function readAnalysis(data) {
     coordinates: data?.coordinates ?? null,
     ndvi: data?.ndvi_score ?? 0,
     ndviChange: metrics.ndvi_change ?? 0,
-    fireRisk: riskLabel(data?.fire_risk),
+    // Sozlesme (feature/ML): risk seviyeleri duz alanlardan okunur. Main'in
+    // eski fire_risk/pollution_percentage/coverage_percentage alanlari
+    // backend'de yok; raporda hep "Bilinmiyor/%0" yazdiriyorlardi.
+    deforestationRisk: riskLabel(data?.deforestation_risk),
     pollutionLevel: riskLabel(data?.pollution_level),
-    pollutionPercent: clampPercent(
-      data?.pollution_percentage ?? pollution.coverage_percentage
-    ),
-    // Onceki surum data.deforestation_risk okuyordu; sozlesmede boyle bir alan
-    // yok, bu yuzden raporda hep "N/A" yaziyordu.
+    pollutionAod:
+      typeof data?.pollution_aod === 'number' ? data.pollution_aod : null,
     deforestationSeverity: SEVERITY_LABELS[deforestation.severity] ?? 'Bilinmiyor',
-    deforestationPercent: deforestation.detected
-      ? clampPercent(deforestation.loss_percentage)
-      : 0,
+    // Tercih duz alan; eski kayitlarda change_detection'a dus
+    deforestationPercent: clampPercent(
+      data?.deforestation_loss_percent ??
+        (deforestation.detected ? deforestation.loss_percentage : 0)
+    ),
+    deforestationDetections: Number(data?.deforestation_detections) || 0,
     detectionCount: detections.length,
     demoMode: Boolean(data?.demo_mode),
     modelLoaded: data?.model_loaded !== false,
@@ -103,15 +105,23 @@ export default function Report({ data }) {
       }
 
       // Olcum tablosu
+      const deforestationValue =
+        analysis.deforestationRisk +
+        ` (%${analysis.deforestationPercent})` +
+        (analysis.deforestationPercent === 0 && analysis.deforestationDetections > 0
+          ? ` · ${analysis.deforestationDetections} tespit`
+          : '');
+      const pollutionValue =
+        analysis.pollutionLevel +
+        (analysis.pollutionAod != null
+          ? ` (AOD ${analysis.pollutionAod.toFixed(2)})`
+          : '');
+
       const rows = [
         ['NDVI skoru', String(analysis.ndvi)],
         ['NDVI değişimi', `${analysis.ndviChange > 0 ? '+' : ''}${analysis.ndviChange}`],
-        ['Yangın riski', analysis.fireRisk],
-        ['Kirlilik alanı', `%${analysis.pollutionPercent} (${analysis.pollutionLevel})`],
-        [
-          'Bitki örtüsü kaybı',
-          `%${analysis.deforestationPercent} (${analysis.deforestationSeverity})`,
-        ],
+        ['Ormansızlaşma', deforestationValue],
+        ['Kirlilik', pollutionValue],
         ['Model tespiti', `${analysis.detectionCount} adet`],
       ];
 
@@ -182,7 +192,7 @@ export default function Report({ data }) {
       {/* Önizleme Modal'ı */}
       {isPreviewOpen && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto flex flex-col">
 
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -202,16 +212,20 @@ export default function Report({ data }) {
                 <PreviewRow label="Bölge" value={analysis.regionName} />
                 <PreviewRow label="NDVI Skoru" value={analysis.ndvi} valueClass="text-green-600" />
                 <PreviewRow
-                  label="Bitki Örtüsü Kaybı"
-                  value={`%${analysis.deforestationPercent}`}
+                  label="Ormansızlaşma"
+                  value={`${analysis.deforestationRisk} (%${analysis.deforestationPercent})`}
                   valueClass="text-orange-600"
                 />
                 <PreviewRow
-                  label="Kirlilik Alanı"
-                  value={`%${analysis.pollutionPercent}`}
+                  label="Kirlilik"
+                  value={
+                    analysis.pollutionLevel +
+                    (analysis.pollutionAod != null
+                      ? ` · AOD ${analysis.pollutionAod.toFixed(2)}`
+                      : '')
+                  }
                   valueClass="text-yellow-600"
                 />
-                <PreviewRow label="Yangın Riski" value={analysis.fireRisk} valueClass="text-red-600" />
                 <PreviewRow
                   label="Uydu Görüntüsü"
                   value={analysis.images?.available ? 'Rapora eklenecek' : 'Yok'}
