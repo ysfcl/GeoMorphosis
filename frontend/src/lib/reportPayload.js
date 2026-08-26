@@ -28,12 +28,33 @@ export function loadLastReport() {
 
 /** Bildirim metinlerinde kullanilan kisa ozet (e-posta + Telegram ortak). */
 export function summarizeAnalysis(result) {
-  const deforestation = result?.ai_results?.change_detection?.deforestation ?? {};
+  const ai = result?.ai_results ?? {};
+  const deforestation = ai.change_detection?.deforestation ?? {};
+  const metrics = ai.environmental_metrics ?? {};
+  const detections = ai.yolo_detections ?? [];
+
   const lossPercent = Number.isFinite(deforestation.loss_percentage)
     ? ` (%${deforestation.loss_percentage})`
     : '';
-  return (
-    `Ormansızlaşma riski ${result?.deforestation_risk ?? 'bilinmiyor'}${lossPercent}, ` +
-    `kirlilik seviyesi ${result?.pollution_level ?? 'bilinmiyor'} olarak hesaplandı.`
-  );
+
+  const ndviScore = result?.ndvi_score;
+  const ndviText = ndviScore != null ? `Ortalama NDVI: ${Number(ndviScore).toFixed(3)}` : '';
+
+  const pollutionAod = result?.pollution_aod;
+  const aodText = pollutionAod != null ? ` (AOD: ${Number(pollutionAod).toFixed(2)})` : '';
+
+  const detectionCount = detections.length;
+  const detectionText = detectionCount > 0
+    ? `YOLO tespit sayısı: ${detectionCount}`
+    : 'YOLO tespiti: yok';
+
+  const parts = [
+    `Ormansızlaşma riski ${result?.deforestation_risk ?? 'bilinmiyor'}${lossPercent}`,
+    `kirlilik seviyesi ${result?.pollution_level ?? 'bilinmiyor'}${aodText}`,
+  ];
+
+  if (ndviText) parts.push(ndviText);
+  parts.push(detectionText);
+
+  return parts.join(', ') + '.';
 }
