@@ -26,8 +26,8 @@ export default function Map({ onRegionSelect, isDarkMode }) {
     pollution: false,
     vegetation: true,
   });
-  // Mobilde harita ayarlari paneli varsayilan olarak kapali; Analizi Baslat
-  // paneliyle cakismamasi icin bir dugmeyle acilip kapaniyor. sm: ve
+  // Mobilde harita ayarlari paneli; Analizi Baslat kucultulmus sekmesi
+  // artik sol alt kose (bottom-24 left-3) oldugu icin cakisma yok. sm: ve
   // ustunde bu state'e bakilmaksizin panel her zaman gorunur.
   const [showLayersPanel, setShowLayersPanel] = useState(false);
 
@@ -733,7 +733,7 @@ export default function Map({ onRegionSelect, isDarkMode }) {
           Harita Görünümü
         </h3>
 
-        <div className="flex bg-gray-100 dark:bg-gray-900 rounded-xl p-1 mb-0 sm:mb-4 transition-colors duration-300">
+        <div className="flex flex-col gap-1 bg-gray-100 dark:bg-gray-900 rounded-xl p-1 mb-0 sm:mb-4 transition-colors duration-300">
 
           {/* NORMAL */}
 

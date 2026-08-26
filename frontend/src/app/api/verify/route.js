@@ -39,7 +39,10 @@ export async function POST(request) {
       );
     } else {
       try {
-        emailSent = await sendAnalysisEmailToUser(userId, body.report);
+        // PDF'teki font/gorseller sunucu tarafinda mutlak adresten iniyor.
+        emailSent = await sendAnalysisEmailToUser(userId, body.report, {
+          baseUrl: new URL(request.url).origin,
+        });
         if (!emailSent) emailSkipReason = 'send-failed';
       } catch (error) {
         emailSkipReason = 'send-error';

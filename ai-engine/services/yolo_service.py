@@ -7,7 +7,7 @@ AI_ENGINE_DIR = Path(__file__).resolve().parent.parent
 # best.pt ultralytics egitiminin dogrudan ciktisi (runs/detect/*/weights/best.pt);
 # train.py ise kopyaladigi dosyayi deforestation_yolov8_v2.pt olarak adlandiriyor.
 CANDIDATE_WEIGHTS = [
-    AI_ENGINE_DIR / "models" / "best2.pt",
+    AI_ENGINE_DIR / "models" / "best.pt",
     AI_ENGINE_DIR / "models" / "deforestation_yolov8_v2.pt",
     AI_ENGINE_DIR / "models" / "deforestation_yolov8.pt",
     AI_ENGINE_DIR / "yolov8n.pt",

@@ -103,23 +103,11 @@ function buildAlertText(taskId, result) {
     ].join('\n');
 }
 
-function buildSubscriberReport(result) {
-    return {
-        lat: result?.coordinates?.lat,
-        lng: result?.coordinates?.lon,
-        riskLevel: result?.deforestation_risk || 'normal',
-        summary: result?.demo_mode
-            ? 'Uydu verisi alınamadığı için demo değerleri gösterildi.'
-            : 'Bölge analizi tamamlandı, detaylar panelde görüntülenebilir.',
-        timestamp: new Date().toISOString(),
-    };
-}
-
 // E-posta ve Telegram ayni sozlesmeyi kullaniyor; tek fark rota adi.
+// Rapor artik HAM analiz sonucu: route'lar PDF'i arayuzdeki indirmeyle
+// birebir ayni ureten ortak ureticiden (lib/pdfReport.js) cikarir.
 async function notifySubscriber(channel, userId, result) {
-    if (!userId) return false;
-
-    const report = buildSubscriberReport(result);
+    if (!userId || !result) return false;
 
     try {
         // Jenerik rota (email/telegram) + Railway ic ag adresi birlesimi
@@ -131,7 +119,7 @@ async function notifySubscriber(channel, userId, result) {
                     ? { 'x-notification-internal-secret': notificationInternalSecret }
                     : {}),
             },
-            body: JSON.stringify({ userId, report }),
+            body: JSON.stringify({ userId, report: result }),
         });
 
         if (!response.ok) {
@@ -278,7 +266,6 @@ module.exports = {
     processTask,
     extractCoordinates,
     shouldAlert,
-    buildSubscriberReport,
     notifySubscriber,
     startWorker,
 };

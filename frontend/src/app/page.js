@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sun, Moon, Send, Info, Bell, Mail, Monitor, X, Satellite, Zap, BarChart3, FileText, MapPin, BrainCircuit, BellRing } from 'lucide-react';
+import { Sun, Moon, Send, Info, Bell, Mail, Monitor, X, Satellite, Zap, BarChart3, FileText, MapPin, BrainCircuit, BellRing, ChevronDown, ChevronUp } from 'lucide-react';
 import Map from '@/components/Map';
 import Toast from '@/components/Toast';
 import { getUserId } from '@/lib/userId';
@@ -47,6 +47,7 @@ export default function Home() {
   const [taskId, setTaskId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [panelMinimized, setPanelMinimized] = useState(false);
   const [toast, setToast] = useState(null);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -301,27 +302,43 @@ export default function Home() {
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            <button
-              onClick={() => setPanelOpen((prev) => !prev)}
-              className="bg-gray-900 dark:bg-gray-700 text-white px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:bg-black dark:hover:bg-gray-600 transition"
-            >
-              {panelOpen ? 'Gizle' : 'Göster'}
-            </button>
           </div>
         </div>
       </nav>
 
-      {panelOpen && (
-        <div className="absolute top-[4.5rem] left-3 right-3 sm:top-28 sm:right-4 sm:left-auto z-[1000] w-full sm:w-96 max-h-[calc(100vh-8rem)] overflow-y-auto">
-          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-3xl shadow-2xl p-5 sm:p-8 flex flex-col gap-4 sm:gap-6 transition-colors duration-300">
-            <h2 className="text-xl sm:text-3xl font-bold dark:text-white">Analizi Başlat</h2>
+      {/* KUCULTULMUS SEKME: sol alt kose, draw toolbarindan (bottomright) uzak */}
+      {panelOpen && panelMinimized && (
+        <button
+          onClick={() => setPanelMinimized(false)}
+          className="absolute top-[9.5rem] right-8 z-[1000] flex items-center gap-2 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-2xl px-4 py-2.5 border border-gray-200 dark:border-gray-700 transition-colors hover:bg-white dark:hover:bg-gray-800"
+          title="Analizi Başlat panelini aç"
+        >
+          <ChevronUp size={16} className="text-gray-600 dark:text-gray-300" />
+          <span className="text-sm font-bold text-gray-800 dark:text-white whitespace-nowrap">Büyült</span>
+        </button>
+      )}
+
+      {panelOpen && !panelMinimized && (
+        <div
+          className="absolute top-[9.5rem] right-3 sm:top-28 sm:right-4 sm:bottom-auto z-[1101] w-[min(15rem,calc(100vw-1.5rem))] sm:w-96 max-h-[45vh] sm:max-h-[calc(100vh-4rem)] overflow-y-auto"
+        >
+          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-3xl shadow-2xl p-3 sm:p-8 flex flex-col gap-3 sm:gap-6 transition-colors duration-300">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg sm:text-3xl font-bold dark:text-white">Harita Üzerinden Analizi Başlat</h2>
+              <button
+                onClick={() => setPanelMinimized(true)}
+                className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                title="Küçült"
+              >
+                <ChevronDown size={18} className="text-gray-600 dark:text-gray-300" />
+              </button>
+            </div>
 
             {selectedRegion ? (
               <>
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-4 sm:p-6">
-                  <h3 className="text-base sm:text-xl font-semibold mb-3 sm:mb-4 dark:text-white">Seçilen Alan / Koordinatlar</h3>
-                  
-                  {/* Yeni şık koordinat görünümü */}
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-3 sm:p-6">
+                  <h3 className="text-sm sm:text-xl font-semibold mb-2 sm:mb-4 dark:text-white">Seçilen Alan / Koordinatlar</h3>
+
                   {resolveCoordinates(selectedRegion) && (
                     <div className="flex flex-col gap-3">
                       <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
@@ -339,7 +356,6 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Secilen alani ve izinli maksimum siniri goster */}
                   {typeof selectedRegion.area_sq_meters === 'number' && (
                     <div className="mt-3 bg-white dark:bg-gray-800 p-3 rounded-xl border border-blue-100 dark:border-blue-900 shadow-sm">
                       <div className="flex justify-between items-center">
@@ -370,7 +386,7 @@ export default function Home() {
                 </div>
               </>
             ) : (
-              <p className="text-gray-500 dark:text-gray-400">Harita üzerinde bir bölge seçin veya çizin.</p>
+              <p className="text-gray-500 dark:text-gray-400">Sağ alttaki buttonları kullanarak Harita üzerinde bir bölge seçin veya çizin.</p>
             )}
           </div>
         </div>
@@ -494,8 +510,12 @@ export default function Home() {
         </div>
       )}
       {loading && taskId && (
-        <div className="absolute bottom-8 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[1000]">
-          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-5">
+        // Mobilde Analizi Baslat kartiyla ayni taban cizgisinde ama ustte
+        // (z-1100) gorunur; icerisinde tiklanabilir ogne yok -> pointer-events
+        // kapali ki altindaki harita/kart etkilesimini bloklamasin.
+        // sm: ve ustunde eski ortalanmis bant yerlesimi korunur.
+        <div className="pointer-events-none absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 right-3 sm:bottom-8 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[1100]">
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-4 sm:p-5 shadow-lg">
             <p className="text-blue-700 dark:text-blue-400 font-semibold animate-pulse">Yapay zekâ bölgeyi işliyor...</p>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 break-all">Fiş No: {taskId}</p>
           </div>

@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { getActiveEmailSubscription } from '@/lib/email-subscriptions';
-import { buildAnalysisPdf } from '@/lib/reportPayload';
+import { buildAnalysisReportPdf } from '@/lib/pdfReport';
+import { summarizeAnalysis } from '@/lib/reportPayload';
 //dotenv'e ihtiyaç duyulmuyor çünkü Next.js otomatik olarak .env dosyasını yükler ve process.env üzerinden erişim sağlar.
 
 let transporter = null;
@@ -60,7 +61,16 @@ export async function sendEmailNotification(to, message, title = 'Sistem Bildiri
   }
 }
 
-export async function sendAnalysisEmailToUser(userId, report) {
+/**
+ * Analiz raporunu PDF ekiyle kullaniciya gonderir.
+ *
+ * @param {object} report  HAM analiz sonucu (statusData.result ile ayni sekil).
+ * @param {object} [options]
+ * @param {string} [options.baseUrl]  Sunucu tarafinda font/gorsel cekmek icin
+ *   mutlak adres (ornek: http://localhost:3000). Route'lar istegin origin'ini
+ *   gecirir; tarayici context'inde gerek yok.
+ */
+export async function sendAnalysisEmailToUser(userId, report, options = {}) {
   try {
     const subscription = await getActiveEmailSubscription(userId);
 
@@ -75,21 +85,24 @@ export async function sendAnalysisEmailToUser(userId, report) {
       orta: 'Orta',
       yuksek: 'Yüksek',
     };
-    const risk = riskLabels[report.riskLevel] || 'Normal';
+    const coords = report?.coordinates || {};
+    const risk = riskLabels[report?.deforestation_risk] || 'Normal';
     const message = [
-      `Konum: ${report.lat}, ${report.lng ?? report.lon}`,
+      `Konum: ${coords.lat ?? '-'}, ${coords.lon ?? '-'}`,
       `Risk seviyesi: ${risk}`,
       '',
-      report.summary,
+      summarizeAnalysis(report),
     ].join('\n');
 
-    // Raporu PDF'e cevirip ek olarak gonder; PDF uretimi basarisa
-    // mailde "Rapor ekte" notu da dusuyor.
+    // Raporu arayuzdeki indirmeyle BIREBIR AYNI ureten ortak ureticiden
+    // cevirip ek olarak gonder; PDF uretimi basarisa mailde "Rapor ekte"
+    // notu da dusuyor.
     let attachments = [];
     let pdfNote = '';
     try {
-      const pdfBuffer = buildAnalysisPdf(report);
-      const regionSlug = String(report.regionName || 'bolge')
+      const doc = await buildAnalysisReportPdf(report, options.baseUrl || '');
+      const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
+      const regionSlug = String(report?.region_name || 'bolge')
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');

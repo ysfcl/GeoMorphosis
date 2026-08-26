@@ -1,3 +1,5 @@
+import { summarizeAnalysis } from '@/lib/reportPayload';
+
 const TELEGRAM_API = 'https://api.telegram.org';
 
 /**
@@ -98,27 +100,30 @@ export async function linkTelegramAccount(userId, chatId) {
   }
 }
 
-function formatAnalysisReport({ lat, lon, riskLevel, summary, timestamp }) {
+// Rapor artik HAM analiz sonucu (statusData.result ile ayni sekil); alanlar
+// burada turetilir. E-posta tarafindaki ozetle ayni kaynak kullanilir.
+function formatAnalysisReport(result) {
   const riskMap = {
     normal: { emoji: '🟢', label: 'NORMAL' },
     dusuk: { emoji: '🟡', label: 'DÜŞÜK' },
     orta: { emoji: '🟠', label: 'ORTA' },
     yuksek: { emoji: '🔴', label: 'YÜKSEK' },
   };
-  const risk = riskMap[riskLevel] || riskMap.normal;
+  const coords = result?.coordinates || {};
+  const risk = riskMap[result?.deforestation_risk] || riskMap.normal;
 
-  const dateStr = new Date(timestamp).toLocaleString('tr-TR', {
+  const dateStr = new Date(result?.timestamp || Date.now()).toLocaleString('tr-TR', {
     day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 
   return [
     '📊 <b>GEOMORPHOSIS SAHA ANALİZ RAPORU</b>',
     '━━━━━━━━━━━━━━━━━━━',
-    `📍 Konum: ${lat}, ${lon}`,
+    `📍 Konum: ${coords.lat ?? '-'}, ${coords.lon ?? '-'}`,
     `${risk.emoji} RİSK SEVİYESİ: ${risk.label}`,
     '',
     '📝 Özet Değerlendirme:',
-    summary,
+    summarizeAnalysis(result),
     '━━━━━━━━━━━━━━━━━━━',
     `🗓️ Tarih: ${dateStr}`,
   ].join('\n');
