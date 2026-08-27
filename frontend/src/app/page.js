@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sun, Moon, Send, Info, Bell, Mail, Monitor, X, Satellite, Zap, BarChart3, FileText, MapPin, BrainCircuit, BellRing, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sun, Moon, Send, Info, Bell, Mail, Monitor, X, Satellite, Zap, BarChart3, FileText, MapPin, BrainCircuit, BellRing, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
 import Map from '@/components/Map';
 import Toast from '@/components/Toast';
 import { getUserId } from '@/lib/userId';
@@ -50,6 +50,7 @@ export default function Home() {
   const [panelMinimized, setPanelMinimized] = useState(false);
   const [toast, setToast] = useState(null);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isHowToOpen, setIsHowToOpen] = useState(false); // YENİ
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   // --- BİLDİRİM FORMU STATELERİ ---
@@ -74,6 +75,14 @@ export default function Home() {
     if (isDarkMode) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
+
+  useEffect(() => {
+    const seen = localStorage.getItem('geomorphosis-howto-seen');
+    if (!seen) {
+      setIsHowToOpen(true);
+      localStorage.setItem('geomorphosis-howto-seen', '1');
+    }
+  }, []);
 
   const stopPolling = () => {
     if (pollRef.current) {
@@ -275,6 +284,15 @@ export default function Home() {
 
           <div className="flex items-center gap-3 md:gap-4">
             <p className="text-xl text-gray-500 dark:text-gray-400 hidden lg:block pr-4">Uydu Analiz Sistemi</p>
+
+            <button
+              onClick={() => setIsHowToOpen(true)}
+              className="flex items-center gap-2 p-2.5 rounded-full md:rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-800/50 transition shadow-sm border border-emerald-100 dark:border-emerald-800"
+              title="Nasıl Kullanılır"
+            >
+              <BookOpen size={20} />
+              <span className="hidden md:block text-sm font-bold pr-1">Nasıl Kullanılır</span>
+            </button>
 
             <button
               onClick={() => setIsAboutOpen(true)}
@@ -598,6 +616,85 @@ export default function Home() {
               <div className="pt-2 border-t border-gray-100 dark:border-gray-700 text-center text-xs text-gray-400">
                 MIT Lisansı ile açık kaynak · geomorphosis.com.tr
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isHowToOpen && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200" onClick={() => setIsHowToOpen(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
+
+            {/* HERO */}
+            <div className="relative bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-6 sm:p-10 text-white overflow-hidden">
+              <div className="absolute -top-16 -right-16 w-48 h-48 bg-white/10 rounded-full blur-2xl" />
+              <button onClick={() => setIsHowToOpen(false)} className="absolute top-4 right-4 p-2 rounded-full bg-white/15 hover:bg-white/25 transition">
+                <X size={18} />
+              </button>
+              <span className="inline-block px-3 py-1 rounded-full bg-white/20 text-[11px] font-bold tracking-widest uppercase mb-4">
+                Hızlı Başlangıç
+              </span>
+              <h2 className="text-2xl sm:text-4xl font-extrabold leading-tight">
+                Nasıl Kullanılır?
+              </h2>
+              <p className="mt-3 text-sm sm:text-base text-blue-50 max-w-lg">
+                Bir bölgeyi analiz etmek için aşağıdaki adımları takip etmen yeterli.
+              </p>
+            </div>
+
+            <div className="p-5 sm:p-8 space-y-4">
+              {[
+                {
+                  step: '1',
+                  icon: MapPin,
+                  title: 'Bir bölge seç',
+                  desc: 'Sağ alttaki çizim araçlarını kullanarak harita üzerinde dikdörtgen ya da poligon çiz, ya da üstteki arama kutusundan bir yer ara.',
+                },
+                {
+                  step: '2',
+                  icon: Zap,
+                  title: '"Analiz Başlat"a tıkla',
+                  desc: 'Sağdaki panelde beliren koordinat/alan bilgisini kontrol et, ardından Analiz Başlat butonuna bas.',
+                },
+                {
+                  step: '3',
+                  icon: Satellite,
+                  title: 'Yapay zekânın işlemesini bekle',
+                  desc: 'Uydu verileri indirilip analiz edilirken ekranda ilerleme bildirimi görünür; bu birkaç saniye ila birkaç dakika sürebilir.',
+                },
+                {
+                  step: '4',
+                  icon: BarChart3,
+                  title: 'Sonuçları incele',
+                  desc: 'Analiz bitince otomatik olarak detay sayfasına yönlendirilirsin; NDVI, ormansızlaşma ve kirlilik verilerini burada görürsün.',
+                },
+                {
+                  step: '5',
+                  icon: Bell,
+                  title: '(Opsiyonel) Bildirim aç',
+                  desc: 'Üstteki Bildirimler butonundan e-posta veya Telegram bağlayarak bölgendeki risklerden anında haberdar ol.',
+                },
+              ].map(({ step, icon: Icon, title, desc }) => (
+                <div key={step} className="flex gap-4 items-start bg-gray-50 dark:bg-gray-900 rounded-2xl p-4">
+                  <span className="shrink-0 w-9 h-9 rounded-full bg-blue-600 text-white text-sm font-bold flex items-center justify-center">
+                    {step}
+                  </span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Icon size={16} className="text-blue-500 shrink-0" />
+                      <h3 className="font-bold text-gray-800 dark:text-white text-sm">{title}</h3>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-300 leading-relaxed">{desc}</p>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                onClick={() => setIsHowToOpen(false)}
+                className="w-full mt-2 bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 transition"
+              >
+                Anladım, Başlayalım
+              </button>
             </div>
           </div>
         </div>
